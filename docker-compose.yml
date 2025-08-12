@@ -1,0 +1,97 @@
+services:
+
+  # InfluxDB 2
+  influxdb2:
+    image: influxdb:2.7-alpine
+    container_name: influxdb2-oss
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin@1234
+      - DOCKER_INFLUXDB_INIT_ORG=insight
+      - DOCKER_INFLUXDB_INIT_BUCKET=insight_collector
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token-influxdb2-oss
+    volumes:
+      - influxdb2_data:/var/lib/influxdb2
+      - influxdb2_config:/etc/influxdb2
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - insight-collector-shared-net
+
+  # Grafana
+  grafana:
+    container_name: insight-collector-grafana
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_EMAIL=admin@localhost
+    depends_on:
+      - influxdb2
+    restart: unless-stopped
+    networks:
+      - insight-collector-shared-net
+
+  # Redis
+  redis:
+    container_name: insight-collector-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - 6384:6379
+    networks:
+      - insight-collector-shared-net
+
+  # Asynqmon
+  asynqmon:
+    container_name: insight-collector-asynqmon
+    image: hibiken/asynqmon:latest
+    environment:
+      - REDIS_ADDR=redis:6379
+      - ENABLE_METRICS_EXPORTER=true
+    restart: unless-stopped
+    ports:
+      - 8083:8080
+    networks:
+      - insight-collector-shared-net
+
+  # Apps insight-collector
+  app:
+    container_name: insight-collector
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.dev
+    working_dir: /insight-collector
+    volumes:
+      - ./:/insight-collector
+    command: tail -f /dev/null
+    ports:
+      - 8002:8002
+    networks:
+      - insight-collector-shared-net
+    depends_on:
+        - redis
+        - influxdb2
+        - asynqmon
+
+volumes:
+  influxdb2_data:
+  influxdb2_config:
+  redis_data:
+  grafana_data:
+
+networks:
+  insight-collector-shared-net:
+    driver: bridge

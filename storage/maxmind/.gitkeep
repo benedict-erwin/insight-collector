@@ -1,0 +1,9 @@
+# MaxMind GeoIP Database Storage Directory
+#
+# This directory stores MaxMind GeoLite2 databases:
+# - GeoLite2-City.mmdb    (City database)
+# - GeoLite2-ASN.mmdb     (ASN database)
+# - .metadata.json        (Version tracking)
+#
+# Database files are not committed to git due to licensing restrictions.
+# Download databases from: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data

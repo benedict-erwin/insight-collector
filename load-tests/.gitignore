@@ -1,0 +1,80 @@
+# Load Testing Results - Ignore all test output files
+results/
+*.json
+*.log
+*.txt
+*.csv
+*.html
+
+# Environment files (may contain sensitive data)
+.env
+.env.local
+.env.production
+
+# Analyzer build artifacts
+analyzer/
+analyzer/**/*
+
+# Docker volumes and temporary files
+docker-data/
+.docker-data/
+
+# K6 specific files
+*.har
+k6_*.json
+k6_*.txt
+
+# Grafana/InfluxDB data
+grafana/
+influxdb-data/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# OS generated files  
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node.js (if using analysis tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (if using analysis tools)  
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Keep important files (negate ignore)
+!README*.md
+!docker-compose.yml
+!*.sh
+!scenarios/
+!config/
+!data/
+!monitoring/
+!.env.example

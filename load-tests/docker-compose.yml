@@ -1,0 +1,95 @@
+# Docker Compose for K6 Load Testing
+# No need to install K6 locally - everything runs in containers
+
+version: '3.8'
+
+services:
+  # K6 Load Testing Runner
+  k6:
+    image: grafana/k6:latest
+    container_name: insight-k6-runner
+    volumes:
+      - .:/app/tests
+      - ./results:/app/results
+    working_dir: /app/tests
+    environment:
+      - TEST_HOST=${TEST_HOST:-http://host.docker.internal:8080}
+      - JWT_TOKEN=${JWT_TOKEN:-dummy-token-for-non-auth-testing}
+      - TEST_TYPE=${TEST_TYPE:-load}
+    networks:
+      - k6-network
+    profiles:
+      - manual  # Only start when specifically requested
+    command: ["run", "--out", "json=/app/results/k6_results.json", "scenarios/mixed-load.js"]
+
+  # InfluxDB for storing K6 metrics (optional but recommended)
+  k6-influxdb:
+    image: influxdb:2.7-alpine
+    container_name: insight-k6-influxdb
+    restart: unless-stopped
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=k6
+      - DOCKER_INFLUXDB_INIT_PASSWORD=k6password
+      - DOCKER_INFLUXDB_INIT_ORG=k6
+      - DOCKER_INFLUXDB_INIT_BUCKET=k6-metrics
+      - DOCKER_INFLUXDB_INIT_RETENTION=7d
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=k6-admin-token-for-testing-only
+    ports:
+      - "8087:8086"  # Different port to avoid conflict with main InfluxDB
+    volumes:
+      - k6-influxdb-data:/var/lib/influxdb2
+      - k6-influxdb-config:/etc/influxdb2
+    networks:
+      - k6-network
+    profiles:
+      - metrics  # Only start when metrics collection needed
+
+  # Grafana for visualizing K6 metrics (optional)
+  k6-grafana:
+    image: grafana/grafana:latest
+    container_name: insight-k6-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=k6admin
+      - GF_INSTALL_PLUGINS=grafana-k6-app
+    ports:
+      - "3001:3000"  # Different port to avoid conflict with main Grafana
+    volumes:
+      - k6-grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - k6-network
+    profiles:
+      - metrics  # Only start when metrics collection needed
+    depends_on:
+      - k6-influxdb
+
+  # K6 Test Results Analyzer (custom service for analyzing results)
+  k6-analyzer:
+    build:
+      context: ./analyzer
+      dockerfile: Dockerfile
+    container_name: insight-k6-analyzer  
+    volumes:
+      - ./results:/app/results
+    environment:
+      - RESULTS_DIR=/app/results
+    networks:
+      - k6-network
+    profiles:
+      - analysis  # Only start when analysis needed
+
+networks:
+  k6-network:
+    driver: bridge
+    name: insight-k6-network
+
+volumes:
+  k6-influxdb-data:
+    name: insight-k6-influxdb-data
+  k6-influxdb-config:
+    name: insight-k6-influxdb-config
+  k6-grafana-data:
+    name: insight-k6-grafana-data

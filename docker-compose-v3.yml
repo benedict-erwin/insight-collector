@@ -1,0 +1,90 @@
+services:
+  # InfluxDB 3
+  influxdb3-core:
+    container_name: insight-collector-influxdb3-core
+    image: influxdb:3-core
+    ports:
+      - 8181:8181
+    command:
+      - influxdb3
+      - serve
+      - --node-id=node0
+      - --object-store=file
+      - --data-dir=/var/lib/influxdb3
+    volumes:
+      - influxdb_data:/var/lib/influxdb3
+    healthcheck:
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - insight-collector-shared-net
+
+  # Grafana
+  grafana:
+    container_name: insight-collector-grafana
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_EMAIL=admin@localhost
+    depends_on:
+      - influxdb3-core
+    restart: unless-stopped
+    networks:
+      - insight-collector-shared-net
+
+  # Redis
+  redis:
+    container_name: insight-collector-redis
+    image: redis:alpine
+    restart: unless-stopped
+    ports:
+      - 6384:6379
+    networks:
+      - insight-collector-shared-net
+
+  # Asynqmon
+  asynqmon:
+    container_name: insight-collector-asynqmon
+    image: hibiken/asynqmon:latest
+    environment:
+      - REDIS_ADDR=redis:6379
+      - ENABLE_METRICS_EXPORTER=true
+    restart: unless-stopped
+    ports:
+      - 8083:8080
+    networks:
+      - insight-collector-shared-net
+
+  # Apps insight-collector
+  app:
+    container_name: insight-collector
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.dev
+    working_dir: /insight-collector
+    volumes:
+      - ./:/insight-collector
+    command: tail -f /dev/null
+    ports:
+      - 8002:8002
+    networks:
+      - insight-collector-shared-net
+    depends_on:
+        - redis
+        - influxdb3-core
+        - asynqmon
+
+volumes:
+  influxdb_data:
+  grafana_data:
+
+networks:
+  insight-collector-shared-net:
+    driver: bridge
