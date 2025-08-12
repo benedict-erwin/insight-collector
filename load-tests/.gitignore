@@ -1,6 +1,5 @@
 # Load Testing Results - Ignore all test output files
 results/
-*.json
 *.log
 *.txt
 *.csv
@@ -25,7 +24,6 @@ k6_*.json
 k6_*.txt
 
 # Grafana/InfluxDB data
-grafana/
 influxdb-data/
 
 # Temporary files

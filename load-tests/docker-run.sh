@@ -5,6 +5,53 @@
 
 set -e
 
+# Signal handler for graceful shutdown
+cleanup_on_exit() {
+    local exit_code=$?
+    print_warning "Received interrupt signal. Performing cleanup..."
+    
+    # Determine docker compose command if not set
+    if [[ -z "$DOCKER_COMPOSE_CMD" ]]; then
+        if docker compose version &> /dev/null; then
+            DOCKER_COMPOSE_CMD="docker compose"
+        elif docker-compose --version &> /dev/null; then
+            DOCKER_COMPOSE_CMD="docker-compose"
+        else
+            print_error "Docker Compose not found. Manual cleanup required."
+            exit $exit_code
+        fi
+    fi
+    
+    # Stop K6 test if running
+    print_info "Stopping K6 test containers..."
+    $DOCKER_COMPOSE_CMD stop k6 2>/dev/null || true
+    
+    # If metrics were started, ask user if they want to keep them running
+    if [[ "$WITH_METRICS" == "true" ]]; then
+        echo ""
+        print_info "Metrics services (InfluxDB & Grafana) are still running."
+        read -p "Do you want to stop metrics services too? [y/N]: " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Stopping metrics services..."
+            $DOCKER_COMPOSE_CMD --profile metrics down
+            print_success "All services stopped"
+        else
+            print_success "Metrics services still running:"
+            echo "  • Grafana: http://localhost:3001 (admin/k6admin)"
+            echo "  • InfluxDB v1.8: http://localhost:8087 (k6/k6password)"
+            echo "  • To stop later: $DOCKER_COMPOSE_CMD --profile metrics down"
+        fi
+    else
+        # If no metrics, just stop any running containers
+        print_info "Stopping any running containers..."
+        $DOCKER_COMPOSE_CMD down 2>/dev/null || true
+    fi
+    
+    print_info "Cleanup completed"
+    exit $exit_code
+}
+
 # Configuration
 DEFAULT_HOST="http://host.docker.internal:8080"  # Docker host networking
 DEFAULT_JWT="dummy-token-for-non-auth-testing"    # Non-auth testing
@@ -22,6 +69,9 @@ print_info() { echo -e "${BLUE}🐳 $1${NC}"; }
 print_success() { echo -e "${GREEN}✅ $1${NC}"; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
+
+# Set trap for SIGINT (Ctrl+C) and SIGTERM
+trap cleanup_on_exit SIGINT SIGTERM
 
 show_usage() {
     echo "🐳 Docker-based K6 Load Testing for InsightCollector"
@@ -135,7 +185,7 @@ start_metrics() {
     $DOCKER_COMPOSE_CMD --profile metrics up -d k6-influxdb k6-grafana
     
     print_success "Metrics services started:"
-    echo "  • InfluxDB: http://localhost:8087 (k6/k6password)"
+    echo "  • InfluxDB v1.8: http://localhost:8087 (k6/k6password)"
     echo "  • Grafana: http://localhost:3001 (admin/k6admin)"
     
     print_info "Waiting for services to be ready..."
@@ -172,7 +222,8 @@ run_k6_test() {
     
     # Add InfluxDB output if metrics services are running
     if docker ps --format "table {{.Names}}" | grep -q "insight-k6-influxdb"; then
-        k6_cmd="$k6_cmd --out influxdb=http://k6-influxdb:8086/k6-metrics"
+        k6_cmd="$k6_cmd --out influxdb=http://k6-influxdb:8086/k6"
+        k6_cmd="$k6_cmd --tag testid=${test_type}_${TIMESTAMP}"
     fi
     
     k6_cmd="$k6_cmd $script_name"
@@ -282,8 +333,8 @@ show_logs() {
     $DOCKER_COMPOSE_CMD logs k6
 }
 
-# Function to cleanup
-cleanup() {
+# Function for full cleanup
+full_cleanup() {
     print_info "Cleaning up containers and volumes..."
     
     $DOCKER_COMPOSE_CMD --profile metrics --profile manual --profile analysis down -v
@@ -300,30 +351,55 @@ cleanup() {
 }
 
 # Main execution
-main() {
-    TEST_TYPE=${1:-"load"}
-    TEST_HOST=${2:-$DEFAULT_HOST}
-    JWT_TOKEN=${3:-$DEFAULT_JWT}
-    
-    # Handle special commands
-    case $TEST_TYPE in
-        "-h"|"--help")
-            show_usage
-            ;;
-        "--cleanup")
-            cleanup
-            exit 0
-            ;;
-        "--logs")
-            show_logs
-            exit 0
-            ;;
-    esac
-    
-    # Parse options
+  main() {
+    # Set defaults
+    TEST_TYPE="load"
+    TEST_HOST=$DEFAULT_HOST
+    JWT_TOKEN=$DEFAULT_JWT
     WITH_METRICS=false
     RUN_ANALYSIS=false
+
+    # Parse arguments properly
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage
+                ;;
+            --cleanup)
+                full_cleanup
+                exit 0
+                ;;
+            --logs)
+                show_logs
+                exit 0
+                ;;
+            --with-metrics)
+                WITH_METRICS=true
+                shift
+                ;;
+            --analyze)
+                RUN_ANALYSIS=true
+                shift
+                ;;
+            smoke|load|stress|spike|mixed|endpoint|single|all)
+                TEST_TYPE=$1
+                shift
+                ;;
+            http://*)
+                TEST_HOST=$1
+                shift
+                ;;
+            *)
+                # Assume it's JWT token if not recognized
+                if [[ ${#1} -gt 50 ]]; then
+                    JWT_TOKEN=$1
+                fi
+                shift
+                ;;
+        esac
+    done
     
+    # Parse options
     for arg in "$@"; do
         case $arg in
             --with-metrics)
@@ -392,7 +468,7 @@ main() {
         echo ""
         print_info "Metrics services are still running:"
         echo "  • Grafana: http://localhost:3001 (admin/k6admin)"
-        echo "  • InfluxDB: http://localhost:8087 (k6/k6password)"
+        echo "  • InfluxDB v1.8: http://localhost:8087 (k6/k6password)"
         echo ""
         echo "To stop metrics services: $DOCKER_COMPOSE_CMD --profile metrics down"
     fi
