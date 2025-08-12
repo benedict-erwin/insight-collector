@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/benedict-erwin/insight-collector/internal/constants"
 	clEntities "github.com/benedict-erwin/insight-collector/internal/entities/callback_logs"
 	clJobs "github.com/benedict-erwin/insight-collector/internal/jobs/callback_logs"
@@ -17,6 +16,7 @@ import (
 	"github.com/benedict-erwin/insight-collector/pkg/logger"
 	"github.com/benedict-erwin/insight-collector/pkg/response"
 	"github.com/benedict-erwin/insight-collector/pkg/utils"
+	"github.com/labstack/echo/v4"
 )
 
 // SaveCallbackLogs handles saving data for security events
@@ -25,7 +25,6 @@ func SaveCallbackLogs(c echo.Context) error {
 
 	// set logger scope
 	log := logger.WithScope("SaveCallbackLogs")
-	log.Info().Msg("=== HANDLER DEBUG: SaveCallbackLogs started ===")
 
 	// Bind JSON into struct
 	if err := c.Bind(&req); err != nil {
@@ -44,11 +43,6 @@ func SaveCallbackLogs(c echo.Context) error {
 	if req.CallbackID == "" {
 		req.CallbackID = fmt.Sprintf("req-%d-%08x", time.Now().Unix(), rand.Uint32())
 	}
-
-	log.Info().
-		Str("generated_callback_id", req.CallbackID).
-		Str("transaction_id", req.TransactionID).
-		Msg("Auto-generated CallbackID")
 
 	// Generate JobId
 	jobID := generateCallbackLogsJobId(&req)
