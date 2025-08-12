@@ -1,8 +1,6 @@
 # Docker Compose for K6 Load Testing
 # No need to install K6 locally - everything runs in containers
 
-version: '3.8'
-
 services:
   # K6 Load Testing Runner
   k6:

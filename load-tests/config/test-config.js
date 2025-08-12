@@ -105,7 +105,6 @@ export function getConfig(testType = 'load') {
   selectedScenario[testType] = config.scenarios[testType];
   
   return {
-    ...config.base,
     scenarios: selectedScenario,
     thresholds: config.thresholds,
   };
