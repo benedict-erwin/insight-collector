@@ -241,12 +241,16 @@ func NewClientForAsynq(heartbeat ...bool) (Client, error) {
 			Str("mode", redisConfig.Mode).
 			Str("prefix", keyPrefix).
 			Int("db", db).
+			Int("concurrency", cfg.Asynq.Concurrency).
+			Int("pool_size", cfg.Asynq.PoolSize).
 			Msg("Asynq Redis client heartbeat check")
 	} else {
 		logger.Info().
 			Str("mode", redisConfig.Mode).
 			Str("prefix", keyPrefix).
 			Int("db", db).
+			Int("concurrency", cfg.Asynq.Concurrency).
+			Int("pool_size", cfg.Asynq.PoolSize).
 			Msg("Asynq Redis client initialized")
 	}
 

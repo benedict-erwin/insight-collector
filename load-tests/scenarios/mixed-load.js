@@ -1,16 +1,14 @@
 // Mixed Load Test - All 4 Endpoints with Realistic Traffic Distribution
 import http from 'k6/http';
 import { check, sleep } from 'k6';
-import { Counter, Rate, Trend, Gauge } from 'k6/metrics';
+import { Counter, Rate, Trend } from 'k6/metrics';
 import { config, getConfig } from '../config/test-config.js';
 import { payloadGenerators } from '../data/payload-generators.js';
 
 // Custom metrics for detailed monitoring
 const jobEnqueueDuration = new Trend('job_enqueue_duration');
-const influxdbWriteDuration = new Trend('influxdb_write_duration');
 const endpointCounter = new Counter('requests_per_endpoint');
 const errorRate = new Rate('error_rate');
-const activeJobsGauge = new Gauge('active_jobs_gauge');
 
 // Test configuration based on environment
 export let options = getConfig(__ENV.TEST_TYPE || 'load');
@@ -115,16 +113,6 @@ export default function() {
     });
   }
 
-  // Simulate InfluxDB write time (approximate based on job processing)
-  if (response.status < 300) {
-    // Simulate InfluxDB write duration based on payload complexity
-    const payloadComplexity = JSON.stringify(payload).length;
-    const simulatedInfluxWriteTime = Math.random() * (payloadComplexity / 1000) + 50;
-    influxdbWriteDuration.add(simulatedInfluxWriteTime);
-  }
-
-  // Update active jobs gauge (simulated)
-  activeJobsGauge.add(Math.floor(Math.random() * 50));
 
   // Variable sleep between requests (0.5 - 2 seconds)
   sleep(Math.random() * 1.5 + 0.5);

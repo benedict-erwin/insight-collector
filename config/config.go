@@ -49,6 +49,7 @@ type (
 	asynq struct {
 		Concurrency int `json:"concurrency" mapstructure:"concurrency"`
 		DB          int `json:"db" mapstructure:"db"`
+		PoolSize    int `json:"pool_size" mapstructure:"pool_size"`
 	}
 
 	auth struct {

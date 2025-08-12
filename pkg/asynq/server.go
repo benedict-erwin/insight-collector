@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/benedict-erwin/insight-collector/config"
 	"github.com/benedict-erwin/insight-collector/pkg/logger"
+	"github.com/hibiken/asynq"
 )
 
 var server *asynq.Server
@@ -26,6 +26,7 @@ func InitServer() *asynq.Server {
 		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		Password: cfg.Redis.Password,
 		DB:       cfg.Asynq.DB,
+		PoolSize: cfg.Asynq.PoolSize,
 	}
 
 	server = asynq.NewServer(

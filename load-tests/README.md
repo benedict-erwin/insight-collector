@@ -148,11 +148,21 @@ cd load-tests
 - **User Activities**: < 2% (critical user path)
 - **Other Endpoints**: < 5%
 
-### Custom Metrics Tracked
-- **Job Enqueue Duration**: Background job creation time
-- **Per-Endpoint Performance**: Individual endpoint metrics
+### What K6 Actually Measures
+**✅ HTTP Layer Performance (Real Metrics):**
+- **HTTP Response Times**: Request-response cycle from K6 perspective
+- **Job Enqueue Duration**: Time to dispatch jobs to Redis queue (HTTP → Queue only)
+- **Per-Endpoint Performance**: Individual endpoint response metrics
 - **Traffic Distribution**: Validation of realistic load patterns
-- **System Resource Usage**: Memory, CPU, queue backlog
+- **Error Rates**: Request success/failure tracking
+
+**❌ Background Processing (Not Measured):**
+- Background worker job processing times
+- Actual InfluxDB write performance
+- Queue processing latency
+- Database transaction times
+
+**📝 Important Note**: K6 tests the HTTP API performance, not the background job processing. A successful HTTP response means the job was enqueued, but doesn't measure how long the background worker takes to process it.
 
 ## 📁 Results Analysis
 
@@ -279,20 +289,20 @@ docker ps
 - Error rates < 2% for critical endpoints
 - Stable performance during sustained load
 - Quick recovery from traffic spikes
-- Queue processing keeps pace with job creation
+- Job enqueue times remain consistent
 
 ### ⚠️ **Warning Signs**
 - Response times trending upward during test
 - Error rates 2-5% range
 - Gradual performance degradation
-- Queue backlogs growing slowly
+- Job enqueue times increasing
 - Memory usage increasing linearly
 
 ### ❌ **Critical Issues**  
 - Response times > 2 seconds consistently
 - Error rates > 5%
 - Service becoming unresponsive
-- Queue processing falling behind
+- Job enqueue failures or timeouts
 - Memory leaks or resource exhaustion
 
 ## 🔧 Optimization Actions Based on Results
@@ -321,17 +331,16 @@ docker logs insight-collector -f
 curl http://localhost:8086/health  # InfluxDB
 ```
 
-### Queue Backlogs
+### High Job Enqueue Times
 ```bash
-# Check current queue lengths  
-redis-cli llen asynq:queues:critical
-redis-cli llen asynq:queues:default
+# Check application load and Redis performance
+curl http://localhost:8080/v1/health
 
-# Scale workers
-./app worker concurrency 50
+# Monitor worker status (if available)
+./app worker status
 
-# Optimize worker allocation
-./app worker set critical 60 user_activities:logging
+# Scale workers if background processing is the bottleneck  
+./app worker concurrency 30
 ```
 
 ## 🌐 Docker Networking Notes

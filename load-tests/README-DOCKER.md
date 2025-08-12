@@ -34,8 +34,8 @@ cd load-tests
 - **Health Checking**: Automatic service availability verification
 
 ### Optional Services (with --with-metrics)
-- **InfluxDB**: Stores detailed K6 metrics
-- **Grafana**: Visualizes test results in real-time
+- **InfluxDB v1.8**: Stores detailed K6 HTTP metrics
+- **Grafana**: Visualizes test results in real-time with auto-provisioned dashboards
 - **Analyzer**: Post-test analysis and recommendations
 
 ## 🛠 Prerequisites
@@ -135,8 +135,8 @@ open http://localhost:3001  # Grafana dashboard
 ```
 
 This starts:
-- **InfluxDB** at `http://localhost:8087` (k6/k6password)
-- **Grafana** at `http://localhost:3001` (admin/k6admin)
+- **InfluxDB v1.8** at `http://localhost:8087` (k6/k6password) 
+- **Grafana** at `http://localhost:3001` (admin/k6admin) with K6 dashboard pre-loaded
 
 ### Access Dashboards
 

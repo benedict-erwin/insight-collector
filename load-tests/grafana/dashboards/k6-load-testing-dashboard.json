@@ -809,40 +809,9 @@
             ]
           ],
           "tags": []
-        },
-        {
-          "alias": "InfluxDB Write Duration",
-          "groupBy": [
-            {
-              "params": [
-                "10s"
-              ],
-              "type": "time"
-            }
-          ],
-          "measurement": "influxdb_write_duration",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "refId": "B",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
         }
       ],
-      "title": "Custom Metrics - Job Processing",
+      "title": "Job Enqueue Duration (Real Metric)",
       "type": "timeseries"
     }
   ],

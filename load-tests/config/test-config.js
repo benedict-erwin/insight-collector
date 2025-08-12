@@ -95,7 +95,6 @@ export const config = {
 
     // Queue processing thresholds (custom metrics)
     'job_enqueue_duration': ['p(95)<100'], // Job enqueue under 100ms
-    'influxdb_write_duration': ['p(95)<500'], // InfluxDB write under 500ms
   },
 };
 
