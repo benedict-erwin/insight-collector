@@ -38,11 +38,14 @@ export const config = {
       executor: 'ramping-vus',
       startVUs: 1,
       stages: [
-        { duration: '2m', target: 20 },   // Ramp up to 20 users
-        { duration: '5m', target: 20 },   // Stay at 20 users
-        { duration: '2m', target: 50 },   // Ramp up to 50 users
-        { duration: '5m', target: 50 },   // Stay at 50 users
-        { duration: '2m', target: 0 },    // Ramp down
+        { duration: '1m', target: 20 },   // Ramp up to 20 users
+        { duration: '1m', target: 50 },   // Ramp up to 50 users  
+        { duration: '1m', target: 100 },  // Ramp up to 100 users
+        { duration: '2m', target: 150 },  // Stay at 150 users
+        { duration: '2m', target: 250 },  // Ramp down to 250 users
+        { duration: '2m', target: 50 },   // Ramp down to 50 users
+        { duration: '2m', target: 20 },   // Ramp down to 20 users
+        { duration: '1m', target: 0 },    // Final ramp down
       ],
       tags: { test_type: 'stress' },
     },

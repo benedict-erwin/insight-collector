@@ -17,3 +17,14 @@ var serveCmd = &cobra.Command{
 		}
 	},
 }
+
+var devCmd = &cobra.Command{
+	Use:   "dev",
+	Short: "Start HTTP Server (Development Mode)",
+	Long:  `Starts the InsightCollector HTTP Server without overseer for development/hot reload`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if err := server.Start(config.Get().App.Port); err != nil {
+			logger.WithScope("devCmd").Error().Err(err).Msg("Failed to start server")
+		}
+	},
+}

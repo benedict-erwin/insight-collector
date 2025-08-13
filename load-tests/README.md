@@ -169,12 +169,12 @@ cd load-tests
 ### Generated Files Structure
 ```
 results/
-├── mixed_20241201_143022.json                    # Mixed test raw data
-├── mixed_20241201_143022_summary.txt            # Mixed test summary
-├── single_user-activities_20241201_144530.json  # Individual endpoint data
+├── mixed_20241201_143022.json                     # Mixed test raw data
+├── mixed_20241201_143022_summary.txt              # Mixed test summary
+├── single_user-activities_20241201_144530.json    # Individual endpoint data
 ├── single_transaction-events_20241201_145001.json
-├── endpoint_comparison_20241201_145500.md       # Comparison report
-└── *_console.log                                # Detailed execution logs
+├── endpoint_comparison_20241201_145500.md         # Comparison report
+└── *_console.log                                  # Detailed execution logs
 ```
 
 ### Key Analysis Commands

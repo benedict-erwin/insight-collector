@@ -6,28 +6,60 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/benedict-erwin/insight-collector/config"
 	"github.com/benedict-erwin/insight-collector/pkg/logger"
+	"github.com/hibiken/asynq"
+	"github.com/redis/go-redis/v9"
 )
 
-var client *asynq.Client
+var (
+	client      *asynq.Client
+	redisClient *redis.Client
+)
 
-// InitClient initializes the Asynq Redis client
+// InitClient initializes the Asynq Redis client with advanced pool optimization
 func InitClient() error {
 	cfg := config.Get()
-	redisOpt := asynq.RedisClientOpt{
+
+	// Create advanced Redis client with optimization parameters
+	redisClient = redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
 		Password: cfg.Redis.Password,
 		DB:       cfg.Asynq.DB, // Use Asynq-specific DB from config
-	}
 
-	client = asynq.NewClient(redisOpt)
+		// POOL OPTIMIZATION
+		PoolSize:        cfg.Asynq.PoolSize,     // Basic pool size (from config)
+		ConnMaxIdleTime: 5 * time.Minute,        // Keep idle connections for 5 minutes (reduce PING frequency)
+		ConnMaxLifetime: 30 * time.Minute,       // Refresh connections every 30 minutes (prevent stale connections)
+		PoolTimeout:     10 * time.Second,       // Timeout when getting connection from pool (prevent blocking)
+		MinIdleConns:    2,                      // Minimum idle connections to maintain
+		MaxIdleConns:    cfg.Asynq.PoolSize / 2, // Maximum idle connections (50% of pool size)
+
+		// Connection timeouts optimization
+		DialTimeout:  5 * time.Second, // Connection establishment timeout
+		ReadTimeout:  3 * time.Second, // Read operation timeout
+		WriteTimeout: 3 * time.Second, // Write operation timeout
+
+		// Retry configuration for reliability
+		MaxRetries:      2,                      // Retry failed commands up to 2 times
+		MinRetryBackoff: 8 * time.Millisecond,   // Minimum backoff between retries
+		MaxRetryBackoff: 512 * time.Millisecond, // Maximum backoff between retries
+	})
+
+	// Create Asynq client using the optimized Redis client
+	client = asynq.NewClientFromRedisClient(redisClient)
+
 	logger.Info().
 		Str("host", cfg.Redis.Host).
 		Int("port", cfg.Redis.Port).
 		Int("db", cfg.Asynq.DB).
-		Msg("Asynq client initialized")
+		Int("pool_size", cfg.Asynq.PoolSize).
+		Dur("conn_max_idle_time", 5*time.Minute).
+		Dur("conn_max_lifetime", 30*time.Minute).
+		Dur("pool_timeout", 10*time.Second).
+		Int("min_idle_conns", 2).
+		Int("max_idle_conns", cfg.Asynq.PoolSize/2).
+		Msg("Asynq client initialized with advanced Redis pool optimization")
 
 	return nil
 }
@@ -109,7 +141,7 @@ func DispatchJob(payload *Payload) error {
 	return nil
 }
 
-// CloseClient closes the Asynq client connection
+// CloseClient closes the Asynq client and Redis client connections
 func CloseClient() {
 	if client != nil {
 		if err := client.Close(); err != nil {
@@ -118,5 +150,15 @@ func CloseClient() {
 			logger.Info().Msg("Asynq client closed")
 		}
 		client = nil
+	}
+
+	// Close the underlying Redis client (required for NewClientFromRedisClient)
+	if redisClient != nil {
+		if err := redisClient.Close(); err != nil {
+			logger.Error().Err(err).Msg("Failed to close Redis client")
+		} else {
+			logger.Info().Msg("Redis client closed")
+		}
+		redisClient = nil
 	}
 }

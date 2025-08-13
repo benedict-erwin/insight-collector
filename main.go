@@ -23,6 +23,9 @@ func main() {
 				RestartSignal:    overseer.SIGUSR2,
 				TerminateTimeout: 30,
 			})
+		case "dev":
+			// Development mode without overseer (for air hot reload)
+			cmd.Execute()
 		case "worker":
 			if len(os.Args) >= 3 && os.Args[2] == "start" {
 				// Worker with overseer (:3001)

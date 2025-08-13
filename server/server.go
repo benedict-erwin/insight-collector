@@ -3,12 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/benedict-erwin/insight-collector/http/middleware"
 	"github.com/benedict-erwin/insight-collector/http/registry"
 	"github.com/benedict-erwin/insight-collector/internal/constants"
@@ -19,7 +20,11 @@ import (
 	"github.com/benedict-erwin/insight-collector/pkg/maxmind"
 	"github.com/benedict-erwin/insight-collector/pkg/redis"
 	"github.com/benedict-erwin/insight-collector/pkg/response"
+	"github.com/labstack/echo/v4"
 )
+
+// Custom http server
+var httpServer *http.Server
 
 // Start initializes and starts the HTTP server
 func Start(port int) error {
@@ -68,7 +73,7 @@ func Start(port int) error {
 			default:
 				code = constants.CodeInternalError
 			}
-			
+
 			// Use custom message if provided, otherwise use standard message
 			if he.Message != nil {
 				message = fmt.Sprintf("%v", he.Message)
@@ -84,14 +89,60 @@ func Start(port int) error {
 
 	// Register routes
 	registry.SetupAllRoutes(e)
+
+	// Log registered routes
 	log.Info().Interface("routes", e.Routes()).Msg("Registered routes")
+
+	// For development only
+	if os.Getenv("GODEBUG") != "" {
+		// Add connection monitoring endpoint
+		e.GET("/debug/connections", func(c echo.Context) error {
+			stats := map[string]interface{}{
+				"timestamp": time.Now().Format(time.RFC3339),
+				"server_info": map[string]interface{}{
+					"read_timeout":        "30s",
+					"write_timeout":       "30s",
+					"idle_timeout":        "120s",
+					"read_header_timeout": "10s",
+					"max_header_bytes":    1048576,
+				},
+			}
+			return c.JSON(200, stats)
+		})
+
+		// Start pprof server for profiling
+		go func() {
+			pprofAddr := fmt.Sprintf(":%d", port+1000)
+			log.Info().Msg("Starting pprof server on " + pprofAddr)
+			if err := http.ListenAndServe(pprofAddr, nil); err != nil {
+				log.Error().Err(err).Msg("Pprof server failed to start")
+			}
+		}()
+	}
+
+	// Configure HTTP server with timeouts
+	addr := fmt.Sprintf(":%d", port)
+	httpServer = &http.Server{
+		Addr:              addr,
+		Handler:           e,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1MB
+	}
 
 	// Start server with graceful shutdown
 	go func() {
-		addr := fmt.Sprintf(":%d", port)
-		log.Info().Msg("Starting server on " + addr)
-		if err := e.Start(addr); err != nil {
-			log.Error().Err(err).Msg("Server failed to start")
+		log.Info().
+			Str("addr", addr).
+			Dur("read_timeout", 30*time.Second).
+			Dur("write_timeout", 30*time.Second).
+			Dur("idle_timeout", 120*time.Second).
+			Msg("Starting HTTP server with timeout configuration")
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Error().Err(err).Msg("HTTP server failed to start")
 		}
 	}()
 
@@ -103,7 +154,7 @@ func Start(port int) error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := e.Shutdown(ctx); err != nil {
+	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Error().Err(err).Msg("Server shutdown failed")
 		return err
 	}

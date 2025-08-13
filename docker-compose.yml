@@ -79,6 +79,12 @@ services:
     command: tail -f /dev/null
     ports:
       - 8002:8002
+      - 9080:9080  # pprof profiling port
+    environment:
+      # Go GC tuning for sustained load performance
+      - GOGC=100          # Default GC target percentage
+      - GOMEMLIMIT=512MiB # Memory limit for GC pressure
+      - GODEBUG=gctrace=1 # Enable GC tracing for debugging
     networks:
       - insight-collector-shared-net
     depends_on:

@@ -86,6 +86,8 @@ show_usage() {
     echo "  mixed         - Mixed endpoint test (all endpoints together)"
     echo "  endpoint      - Individual endpoint focus test (all endpoints separately)"
     echo "  single        - Single endpoint intensive test"
+    echo "  health-only   - Health endpoint stress test (16m, up to 50 users)"
+    echo "  asynq-only    - Asynq endpoint stress test (16m, up to 50 users)"
     echo "  all           - Run all test types sequentially"
     echo ""
     echo "OPTIONS:"
@@ -204,6 +206,10 @@ run_k6_test() {
         script_name="scenarios/mixed-load.js"
     elif [[ "$test_type" == "endpoint" ]]; then
         script_name="scenarios/endpoint-specific.js"
+    elif [[ "$test_type" == "health-only" ]]; then
+        script_name="scenarios/health-only-isolated.js"
+    elif [[ "$test_type" == "asynq-only" ]]; then
+        script_name="scenarios/asynq-only.js"
     else
         script_name="scenarios/mixed-load.js"
     fi
@@ -220,9 +226,9 @@ run_k6_test() {
     k6_cmd="$k6_cmd --out json=$json_output"
     k6_cmd="$k6_cmd --summary-export=$summary_output"
     
-    # Add InfluxDB output if metrics services are running
-    if docker ps --format "table {{.Names}}" | grep -q "insight-k6-influxdb"; then
-        k6_cmd="$k6_cmd --out influxdb=http://k6-influxdb:8086/k6"
+     # Add InfluxDB output ONLY if explicitly requested with --with-metrics
+    if [[ "$WITH_METRICS" == "true" ]] && docker ps --format "table {{.Names}}" | grep -q "insight-k6-influxdb"; then
+        k6_cmd="$k6_cmd --out influxdb=http://k6-influxdb:8086/k6?pushInterval=5s"
         k6_cmd="$k6_cmd --tag testid=${test_type}_${TIMESTAMP}"
     fi
     
@@ -336,7 +342,19 @@ show_logs() {
 # Function for full cleanup
 full_cleanup() {
     print_info "Cleaning up containers and volumes..."
-    
+
+    # Detect docker compose command if not already set
+    if [[ -z "$DOCKER_COMPOSE_CMD" ]]; then
+        if docker compose version &> /dev/null; then
+            DOCKER_COMPOSE_CMD="docker compose"
+        elif docker-compose --version &> /dev/null; then
+            DOCKER_COMPOSE_CMD="docker-compose"
+        else
+            print_error "Docker Compose not found. Manual cleanup required."
+            exit 1
+        fi
+    fi
+
     $DOCKER_COMPOSE_CMD --profile metrics --profile manual --profile analysis down -v
     
     # Remove custom networks
@@ -381,7 +399,7 @@ full_cleanup() {
                 RUN_ANALYSIS=true
                 shift
                 ;;
-            smoke|load|stress|spike|mixed|endpoint|single|all)
+            smoke|load|stress|spike|mixed|endpoint|single|all|health-only|asynq-only)
                 TEST_TYPE=$1
                 shift
                 ;;
@@ -431,7 +449,7 @@ full_cleanup() {
     
     # Run tests
     case $TEST_TYPE in
-        "smoke"|"load"|"stress"|"spike"|"mixed"|"endpoint")
+        "smoke"|"load"|"stress"|"spike"|"mixed"|"endpoint"|"health-only"|"asynq-only")
             run_k6_test "$TEST_TYPE"
             ;;
         "all")

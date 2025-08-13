@@ -82,5 +82,6 @@ func init() {
 
 	// Add commands
 	rootCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(devCmd)
 	rootCmd.AddCommand(workerCmd)
 }

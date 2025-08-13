@@ -108,7 +108,7 @@ export default function() {
     console.error(`❌ ${endpoint} failed:`, {
       status: response.status,
       url: url,
-      body: response.body.substring(0, 200),
+      body: response.body ? response.body.substring(0, 200) : 'No response body',
       duration: response.timings.duration,
     });
   }
