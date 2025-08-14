@@ -50,6 +50,14 @@ type Config struct {
 		ASN  string `json:"asn"`
 	} `json:"databases"`
 	Downloader DownloaderConfig `json:"downloader"`
+	Cache      CacheConfig      `json:"cache"`
+}
+
+// CacheConfig holds cache-specific configuration
+type CacheConfig struct {
+	Enabled    bool   `json:"enabled"`
+	MaxEntries int    `json:"max_entries"`
+	TTL        string `json:"ttl"`
 }
 
 // DownloaderConfig holds downloader-specific configuration

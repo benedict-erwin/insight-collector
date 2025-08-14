@@ -11,10 +11,22 @@ import (
 
 	"github.com/benedict-erwin/insight-collector/pkg/logger"
 	"github.com/benedict-erwin/insight-collector/pkg/utils"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oschwald/geoip2-golang/v2"
 )
 
-// SafeGeoIPReader provides thread-safe access to GeoIP databases
+// cacheEntry wraps cached data with expiration time
+type cacheEntry[T any] struct {
+	Data      T
+	ExpiresAt time.Time
+}
+
+// isExpired checks if cache entry is expired
+func (e *cacheEntry[T]) isExpired() bool {
+	return time.Now().After(e.ExpiresAt)
+}
+
+// SafeGeoIPReader provides thread-safe access to GeoIP databases with LRU caching
 type SafeGeoIPReader struct {
 	mu              sync.RWMutex
 	cityReader      *geoip2.Reader
@@ -25,6 +37,11 @@ type SafeGeoIPReader struct {
 	dbInfo          *DatabaseInfo
 	stopCh          chan struct{}
 	wg              sync.WaitGroup
+	
+	// LRU caches for performance optimization
+	cityCache *lru.Cache[string, *cacheEntry[*GeoLocation]]
+	asnCache  *lru.Cache[string, *cacheEntry[*ASNInfo]]
+	cacheTTL  time.Duration
 }
 
 // NewSafeGeoIPReader creates a new thread-safe GeoIP reader
@@ -41,6 +58,11 @@ func NewSafeGeoIPReader(config *Config) (*SafeGeoIPReader, error) {
 		logger.Info().Msg("MaxMind GeoIP service is disabled")
 		return reader, nil
 	}
+	
+	// Initialize LRU cache if enabled
+	if err := reader.initCaches(); err != nil {
+		logger.Warn().Err(err).Msg("Failed to initialize MaxMind caches, continuing without cache")
+	}
 
 	// Initial database load
 	if err := reader.loadDatabases(); err != nil {
@@ -52,6 +74,56 @@ func NewSafeGeoIPReader(config *Config) (*SafeGeoIPReader, error) {
 	reader.startPeriodicChecker()
 
 	return reader, nil
+}
+
+// initCaches initializes LRU caches if cache is enabled
+func (r *SafeGeoIPReader) initCaches() error {
+	if !r.config.Cache.Enabled {
+		logger.Debug().Msg("MaxMind cache disabled")
+		return nil
+	}
+	
+	// Parse TTL
+	ttl, err := time.ParseDuration(r.config.Cache.TTL)
+	if err != nil {
+		logger.Warn().Err(err).Str("ttl", r.config.Cache.TTL).Msg("Invalid cache TTL, disabling cache")
+		return err
+	}
+	r.cacheTTL = ttl
+	
+	// Initialize City cache
+	cityCache, err := lru.New[string, *cacheEntry[*GeoLocation]](r.config.Cache.MaxEntries)
+	if err != nil {
+		return fmt.Errorf("failed to create city cache: %w", err)
+	}
+	r.cityCache = cityCache
+	
+	// Initialize ASN cache
+	asnCache, err := lru.New[string, *cacheEntry[*ASNInfo]](r.config.Cache.MaxEntries)
+	if err != nil {
+		return fmt.Errorf("failed to create ASN cache: %w", err)
+	}
+	r.asnCache = asnCache
+	
+	logger.Info().
+		Bool("enabled", true).
+		Int("max_entries", r.config.Cache.MaxEntries).
+		Dur("ttl", ttl).
+		Msg("MaxMind LRU cache initialized")
+		
+	return nil
+}
+
+// clearCaches clears all LRU caches (called during database reload)
+func (r *SafeGeoIPReader) clearCaches() {
+	if r.cityCache != nil {
+		r.cityCache.Purge()
+		logger.Debug().Msg("MaxMind city cache cleared")
+	}
+	if r.asnCache != nil {
+		r.asnCache.Purge()
+		logger.Debug().Msg("MaxMind ASN cache cleared")
+	}
 }
 
 // loadDatabases loads or reloads GeoIP databases
@@ -93,6 +165,9 @@ func (r *SafeGeoIPReader) loadDatabases() error {
 
 	r.cityReader = newCityReader
 	r.asnReader = newASNReader
+
+	// Clear caches when databases are reloaded
+	r.clearCaches()
 
 	// Update database info
 	r.updateDatabaseInfo(cityDBPath, asnDBPath)
@@ -195,13 +270,39 @@ func (r *SafeGeoIPReader) startPeriodicChecker() {
 	}()
 }
 
-// LookupCity performs city lookup with safe fallback
+// LookupCity performs city lookup with LRU cache and safe fallback
 func (r *SafeGeoIPReader) LookupCity(ip net.IP) *GeoLocation {
-	result := DefaultGeoLocation(ip)
-
 	if !r.config.Enabled {
-		return result
+		return DefaultGeoLocation(ip)
 	}
+	
+	ipStr := ip.String()
+	
+	// Check cache first if enabled
+	if r.cityCache != nil {
+		if cached, found := r.cityCache.Get(ipStr); found && !cached.isExpired() {
+			return cached.Data
+		}
+	}
+	
+	// Cache miss or expired - perform database lookup
+	result := r.performCityDBLookup(ip)
+	
+	// Cache the result if cache is enabled
+	if r.cityCache != nil && result != nil {
+		entry := &cacheEntry[*GeoLocation]{
+			Data:      result,
+			ExpiresAt: time.Now().Add(r.cacheTTL),
+		}
+		r.cityCache.Add(ipStr, entry)
+	}
+	
+	return result
+}
+
+// performCityDBLookup performs actual database lookup (extracted from original LookupCity)
+func (r *SafeGeoIPReader) performCityDBLookup(ip net.IP) *GeoLocation {
+	result := DefaultGeoLocation(ip)
 
 	r.mu.RLock()
 	reader := r.cityReader
@@ -251,13 +352,39 @@ func (r *SafeGeoIPReader) LookupCity(ip net.IP) *GeoLocation {
 	return result
 }
 
-// LookupASN performs ASN lookup with safe fallback
+// LookupASN performs ASN lookup with LRU cache and safe fallback
 func (r *SafeGeoIPReader) LookupASN(ip net.IP) *ASNInfo {
-	result := DefaultASNInfo(ip)
-
 	if !r.config.Enabled {
-		return result
+		return DefaultASNInfo(ip)
 	}
+	
+	ipStr := ip.String()
+	
+	// Check cache first if enabled
+	if r.asnCache != nil {
+		if cached, found := r.asnCache.Get(ipStr); found && !cached.isExpired() {
+			return cached.Data
+		}
+	}
+	
+	// Cache miss or expired - perform database lookup
+	result := r.performASNDBLookup(ip)
+	
+	// Cache the result if cache is enabled
+	if r.asnCache != nil && result != nil {
+		entry := &cacheEntry[*ASNInfo]{
+			Data:      result,
+			ExpiresAt: time.Now().Add(r.cacheTTL),
+		}
+		r.asnCache.Add(ipStr, entry)
+	}
+	
+	return result
+}
+
+// performASNDBLookup performs actual database lookup (extracted from original LookupASN)
+func (r *SafeGeoIPReader) performASNDBLookup(ip net.IP) *ASNInfo {
+	result := DefaultASNInfo(ip)
 
 	r.mu.RLock()
 	reader := r.asnReader
@@ -343,6 +470,16 @@ func (r *SafeGeoIPReader) Close() error {
 	if r.asnReader != nil {
 		r.asnReader.Close()
 		r.asnReader = nil
+	}
+	
+	// Clear caches on close
+	if r.cityCache != nil {
+		r.cityCache.Purge()
+		r.cityCache = nil
+	}
+	if r.asnCache != nil {
+		r.asnCache.Purge()
+		r.asnCache = nil
 	}
 
 	logger.Debug().Msg("MaxMind GeoIP reader closed")

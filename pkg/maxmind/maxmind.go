@@ -139,6 +139,11 @@ func getMaxMindConfig(cfg *config.Config) *Config {
 			RetryAttempts: cfg.MaxMind.Downloader.RetryAttempts,
 			RetryDelay:    cfg.MaxMind.Downloader.RetryDelay,
 		},
+		Cache: CacheConfig{
+			Enabled:    cfg.MaxMind.Cache.Enabled,
+			MaxEntries: cfg.MaxMind.Cache.MaxEntries,
+			TTL:        cfg.MaxMind.Cache.TTL,
+		},
 	}
 	
 	// Apply defaults if configuration is missing
@@ -167,6 +172,14 @@ func getMaxMindConfig(cfg *config.Config) *Config {
 	}
 	if maxmindCfg.Downloader.RetryDelay == "" {
 		maxmindCfg.Downloader.RetryDelay = "5s"
+	}
+	
+	// Apply cache defaults
+	if maxmindCfg.Cache.MaxEntries == 0 {
+		maxmindCfg.Cache.MaxEntries = 10000 // Default to 10,000 entries
+	}
+	if maxmindCfg.Cache.TTL == "" {
+		maxmindCfg.Cache.TTL = "1h" // Default 1 hour TTL
 	}
 	
 	return maxmindCfg

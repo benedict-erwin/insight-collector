@@ -101,14 +101,17 @@ func Start(port int) error {
 			stats := map[string]interface{}{
 				"timestamp": time.Now().Format(time.RFC3339),
 				"server_info": map[string]interface{}{
-					"read_timeout":        "30s",
-					"write_timeout":       "30s",
-					"idle_timeout":        "120s",
-					"read_header_timeout": "10s",
-					"max_header_bytes":    1048576,
+					"read_timeout":         "10s",
+					"write_timeout":        "10s",
+					"idle_timeout":         "30s",
+					"read_header_timeout":  "5s",
+					"max_header_bytes":     1048576,
+					"keepalive_period":     "15s",
+					"tcp_nodelay":          true,
+					"tcp_linger":           0,
 				},
 			}
-			return c.JSON(200, stats)
+			return response.Success(c, stats)
 		})
 
 		// Start pprof server for profiling
@@ -126,20 +129,36 @@ func Start(port int) error {
 	httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           e,
-		ReadTimeout:       15 * time.Second, // Reduced for faster timeout detection
-		WriteTimeout:      15 * time.Second, // Reduced for faster timeout detection
-		IdleTimeout:       60 * time.Second, // Reduced to free connections faster
+		ReadTimeout:       10 * time.Second, // Reduced for faster timeout detection
+		WriteTimeout:      10 * time.Second, // Reduced for faster timeout detection
+		IdleTimeout:       30 * time.Second, // Reduced to free connections faster
 		ReadHeaderTimeout: 5 * time.Second,  // Reduced for faster header processing
 		MaxHeaderBytes:    1 << 20,          // 1MB
 
 		// HIGH LOAD OPTIMIZATIONS
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-			// Set TCP keepalive for connection efficiency
+			// Advanced TCP socket optimizations
 			if tcpConn, ok := c.(*net.TCPConn); ok {
 				tcpConn.SetKeepAlive(true)
-				tcpConn.SetKeepAlivePeriod(30 * time.Second)
+				tcpConn.SetKeepAlivePeriod(15 * time.Second) // More aggressive keepalive
+				tcpConn.SetNoDelay(true)                     // Disable Nagle's algorithm for lower latency
+				tcpConn.SetLinger(0)                         // Close immediately without waiting
 			}
 			return ctx
+		},
+
+		// Connection state monitoring for high load debugging
+		ConnState: func(conn net.Conn, state http.ConnState) {
+			// Log connection state changes during high load
+			if state == http.StateNew || state == http.StateClosed {
+				// Only log during development/debugging
+				if os.Getenv("GODEBUG") != "" {
+					log.Debug().
+						Str("remote_addr", conn.RemoteAddr().String()).
+						Str("state", state.String()).
+						Msg("HTTP connection state changed")
+				}
+			}
 		},
 	}
 
@@ -147,10 +166,12 @@ func Start(port int) error {
 	go func() {
 		log.Info().
 			Str("addr", addr).
-			Dur("read_timeout", 30*time.Second).
-			Dur("write_timeout", 30*time.Second).
-			Dur("idle_timeout", 120*time.Second).
-			Msg("Starting HTTP server with timeout configuration")
+			Dur("read_timeout", 10*time.Second).
+			Dur("write_timeout", 10*time.Second).
+			Dur("idle_timeout", 30*time.Second).
+			Dur("keepalive_period", 15*time.Second).
+			Bool("tcp_nodelay", true).
+			Msg("Starting HTTP server with advanced TCP optimization")
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error().Err(err).Msg("HTTP server failed to start")

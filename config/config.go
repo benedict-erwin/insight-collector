@@ -75,6 +75,11 @@ type (
 			RetryAttempts int    `json:"retry_attempts" mapstructure:"retry_attempts"`
 			RetryDelay    string `json:"retry_delay" mapstructure:"retry_delay"`
 		} `json:"downloader" mapstructure:"downloader"`
+		Cache struct {
+			Enabled    bool   `json:"enabled" mapstructure:"enabled"`
+			MaxEntries int    `json:"max_entries" mapstructure:"max_entries"`
+			TTL        string `json:"ttl" mapstructure:"ttl"`
+		} `json:"cache" mapstructure:"cache"`
 	}
 
 	ClientConfig struct {

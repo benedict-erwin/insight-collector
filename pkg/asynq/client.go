@@ -87,64 +87,64 @@ func DispatchJob(payload *Payload) error {
 		return err
 	}
 
-	// Create new task
-	task := asynq.NewTask(payload.TaskType, data)
-	client := GetClient()
+	// Enqueue in timeout-protected goroutine
+	go func() {
+		// Create new task
+		task := asynq.NewTask(payload.TaskType, data)
+		client := GetClient()
 
-	if client == nil {
-		log.Error().Msg("Asynq client not initialized")
-		return fmt.Errorf("queue client not available")
-	}
-
-	// Route to appropriate queue
-	queue := GetQueueForTaskType(payload.TaskType)
-
-	// Add timeout and reduced uniqueness check
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // 5s timeout for enqueue
-	defer cancel()
-
-	_, err = client.EnqueueContext(
-		ctx,
-		task,
-		asynq.Queue(queue),
-		asynq.Unique(1*time.Minute), // Reduced uniqueness window from 5min to 1min
-		asynq.TaskID(payload.TaskId),
-		asynq.Retention(10*time.Minute), // Retain completed tasks for 10min only (reduce memory)
-	)
-	if err != nil {
-		// Duplicate task
-		if errors.Is(err, asynq.ErrDuplicateTask) {
-			log.Warn().
-				Str("taskId", payload.TaskId).
-				Str("taskType", payload.TaskType).
-				Msg("Duplicate task ignored - already in queue")
-			return nil
+		if client == nil {
+			log.Error().Msg("Asynq client not initialized")
 		}
 
-		// Conflict task
-		if errors.Is(err, asynq.ErrTaskIDConflict) {
-			log.Warn().
+		// Route to appropriate queue
+		queue := GetQueueForTaskType(payload.TaskType)
+
+		// Add timeout and reduced uniqueness check
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // 5s timeout for enqueue
+		defer cancel()
+
+		// Enqueue process
+		_, err = client.EnqueueContext(
+			ctx,
+			task,
+			asynq.Queue(queue),
+			asynq.Unique(1*time.Minute), // Reduced uniqueness window from 5min to 1min
+			asynq.TaskID(payload.TaskId),
+			asynq.Retention(10*time.Minute), // Retain completed tasks for 10min only (reduce memory)
+		)
+		if err != nil {
+			// Duplicate task
+			if errors.Is(err, asynq.ErrDuplicateTask) {
+				log.Warn().
+					Str("taskId", payload.TaskId).
+					Str("taskType", payload.TaskType).
+					Msg("Duplicate task ignored - already in queue")
+			}
+
+			// Conflict task
+			if errors.Is(err, asynq.ErrTaskIDConflict) {
+				log.Warn().
+					Str("taskId", payload.TaskId).
+					Str("taskType", payload.TaskType).
+					Msg("Task ID conflict - duplicate task")
+			}
+
+			// Other errors
+			log.Error().
+				Err(err).
 				Str("taskId", payload.TaskId).
 				Str("taskType", payload.TaskType).
-				Msg("Task ID conflict - duplicate task")
-			return nil
+				Msg("Failed to enqueue task")
 		}
 
-		// Other errors
-		log.Error().
-			Err(err).
+		// Success
+		log.Info().
 			Str("taskId", payload.TaskId).
 			Str("taskType", payload.TaskType).
-			Msg("Failed to enqueue task")
-		return fmt.Errorf("failed to enqueue task: %w", err)
-	}
-
-	// Success
-	log.Info().
-		Str("taskId", payload.TaskId).
-		Str("taskType", payload.TaskType).
-		Str("queue", queue).
-		Msg("Task enqueued successfully")
+			Str("queue", queue).
+			Msg("Task enqueued successfully")
+	}()
 
 	return nil
 }

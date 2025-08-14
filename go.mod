@@ -5,6 +5,7 @@ go 1.24.3
 require (
 	github.com/InfluxCommunity/influxdb3-go/v2 v2.8.0
 	github.com/golang-jwt/jwt/v5 v5.2.3
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/hibiken/asynq v0.25.1
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0
 	github.com/olekukonko/tablewriter v1.0.8
@@ -30,7 +31,7 @@ require (
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
-	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/goccy/go-json v0.10.5
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/influxdata/line-protocol/v2 v2.2.1 // indirect
