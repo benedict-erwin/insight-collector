@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hibiken/asynq"
 	"github.com/benedict-erwin/insight-collector/config"
 	"github.com/benedict-erwin/insight-collector/internal/constants"
 	"github.com/benedict-erwin/insight-collector/internal/jobs"
 	"github.com/benedict-erwin/insight-collector/pkg/logger"
 	"github.com/benedict-erwin/insight-collector/pkg/redis"
+	"github.com/hibiken/asynq"
 )
 
 type WorkerConfig struct {
@@ -420,11 +420,11 @@ func generateDefaultWorkers() []WorkerConfig {
 func getDefaultPercentage(queue string, totalQueues int) int {
 	switch queue {
 	case constants.QueueCritical:
-		return 60 // High priority jobs get most resources
+		return 70 // High priority jobs
 	case constants.QueueDefault:
-		return 30 // Normal jobs get standard allocation
+		return 20 // Normal/Standard allocation jobs
 	case constants.QueueLow:
-		return 10 // Background jobs get minimal resources
+		return 10 // Low priority/minimal resources jobs
 	default:
 		// For custom queues, distribute remaining percentage evenly
 		return 100 / totalQueues
@@ -477,19 +477,19 @@ func normalizePercentages(workers []WorkerConfig) []WorkerConfig {
 // updateConfigFileConcurrency updates the concurrency value in the config file
 func updateConfigFileConcurrency(concurrency int) error {
 	const configFile = ".config.json"
-	
+
 	// Read current config file
 	configData, err := os.ReadFile(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	// Parse JSON
 	var configMap map[string]interface{}
 	if err := json.Unmarshal(configData, &configMap); err != nil {
 		return fmt.Errorf("failed to parse config JSON: %w", err)
 	}
-	
+
 	// Update asynq.concurrency field
 	if asynqConfig, exists := configMap["asynq"]; exists {
 		if asynqMap, ok := asynqConfig.(map[string]interface{}); ok {
@@ -504,17 +504,17 @@ func updateConfigFileConcurrency(concurrency int) error {
 			"db":          0, // default db
 		}
 	}
-	
+
 	// Write back to file with proper formatting
 	updatedData, err := json.MarshalIndent(configMap, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal updated config: %w", err)
 	}
-	
+
 	if err := os.WriteFile(configFile, updatedData, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	logger.Info().Int("concurrency", concurrency).Str("config_file", configFile).Msg("Configuration file updated with new concurrency")
 	return nil
 }

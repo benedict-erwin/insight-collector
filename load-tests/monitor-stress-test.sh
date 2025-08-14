@@ -70,16 +70,32 @@ get_redis_pool_stats() {
 
 # Function to get Asynq queue details
 get_asynq_queues() {
-    local critical=$(docker exec insight-collector-redis redis-cli llen "asynq:{critical}:pending" 2>/dev/null || echo "0")
-    local low=$(docker exec insight-collector-redis redis-cli llen "asynq:{low}:pending" 2>/dev/null || echo "0")
-    echo "Critical:$critical Low:$low"
+    # Discovery mode: Find actual queue keys first
+    local queue_keys=$(docker exec insight-collector-redis redis-cli keys "asynq:*" 2>/dev/null | grep -E "(critical|low|default)" | head -3)
+    
+    # Try different common patterns
+    local critical=$(docker exec insight-collector-redis redis-cli llen "asynq:queues:critical" 2>/dev/null || \
+                     docker exec insight-collector-redis redis-cli llen "asynq:critical" 2>/dev/null || echo "0")
+    local low=$(docker exec insight-collector-redis redis-cli llen "asynq:queues:low" 2>/dev/null || \
+                docker exec insight-collector-redis redis-cli llen "asynq:low" 2>/dev/null || echo "0")
+    local default=$(docker exec insight-collector-redis redis-cli llen "asynq:queues:default" 2>/dev/null || \
+                    docker exec insight-collector-redis redis-cli llen "asynq:default" 2>/dev/null || echo "0")
+    
+    echo "Critical:$critical Low:$low Default:$default"
 }
 
-# Function to get Asynq worker stats
+# Function to get Asynq worker stats  
 get_asynq_workers() {
-    local active=$(docker exec insight-collector-redis redis-cli zcard "asynq:workers" 2>/dev/null || echo "0")
-    local processing=$(docker exec insight-collector-redis redis-cli zcard "asynq:active" 2>/dev/null || echo "0")
-    echo "Active:$active Processing:$processing"
+    # Safe mode: Only get metrics that definitely work
+    local asynq_keys=$(docker exec insight-collector-redis redis-cli keys "asynq:*" 2>/dev/null | wc -l)
+    local worker_process=$(docker exec insight-collector pgrep -f "worker start" 2>/dev/null | wc -l)
+    
+    # Simple check: if we have asynq keys and worker process, server is running
+    if [ "$asynq_keys" -gt 0 ] && [ "$worker_process" -gt 0 ]; then
+        echo "Status:RUNNING Process:$worker_process Keys:$asynq_keys"
+    else
+        echo "Status:STOPPED Process:$worker_process Keys:$asynq_keys"
+    fi
 }
 
 # Function to get Go runtime stats

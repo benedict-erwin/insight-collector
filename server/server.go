@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -120,16 +121,26 @@ func Start(port int) error {
 		}()
 	}
 
-	// Configure HTTP server with timeouts
+	// Configure HTTP server with optimized settings for high load
 	addr := fmt.Sprintf(":%d", port)
 	httpServer = &http.Server{
 		Addr:              addr,
 		Handler:           e,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		ReadHeaderTimeout: 10 * time.Second,
-		MaxHeaderBytes:    1 << 20, // 1MB
+		ReadTimeout:       15 * time.Second, // Reduced for faster timeout detection
+		WriteTimeout:      15 * time.Second, // Reduced for faster timeout detection
+		IdleTimeout:       60 * time.Second, // Reduced to free connections faster
+		ReadHeaderTimeout: 5 * time.Second,  // Reduced for faster header processing
+		MaxHeaderBytes:    1 << 20,          // 1MB
+
+		// HIGH LOAD OPTIMIZATIONS
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			// Set TCP keepalive for connection efficiency
+			if tcpConn, ok := c.(*net.TCPConn); ok {
+				tcpConn.SetKeepAlive(true)
+				tcpConn.SetKeepAlivePeriod(30 * time.Second)
+			}
+			return ctx
+		},
 	}
 
 	// Start server with graceful shutdown

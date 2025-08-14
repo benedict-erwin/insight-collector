@@ -81,6 +81,22 @@ func InitServer() *asynq.Server {
 		Int("min_idle_conns", 2).
 		Int("max_idle_conns", cfg.Asynq.PoolSize/2).
 		Msg("Asynq server initialized with advanced Redis pool optimization")
+
+	// Verify actual concurrency setting without non-serializable fields
+	log.Warn().
+		Int("actual_concurrency", GetConcurrency()).
+		Int("config_concurrency", cfg.Asynq.Concurrency).
+		Interface("queues", GenerateQueues()).
+		Dur("shutdown_timeout", 30*time.Second).
+		Bool("concurrency_match", GetConcurrency() == cfg.Asynq.Concurrency).
+		Msg("Asynq server concurrency verification")
+
+	// Additional debug: Verify server will process jobs with correct concurrency
+	log.Info().
+		Str("server_type", "NewServerFromRedisClient").
+		Int("max_concurrent_jobs", GetConcurrency()).
+		Int("queue_count", len(GenerateQueues())).
+		Msg("Asynq server ready to process jobs with full concurrency")
 	return server
 }
 

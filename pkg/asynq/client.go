@@ -1,6 +1,7 @@
 package asynq
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,11 +98,18 @@ func DispatchJob(payload *Payload) error {
 
 	// Route to appropriate queue
 	queue := GetQueueForTaskType(payload.TaskType)
-	_, err = client.Enqueue(
+
+	// Add timeout and reduced uniqueness check
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // 5s timeout for enqueue
+	defer cancel()
+
+	_, err = client.EnqueueContext(
+		ctx,
 		task,
 		asynq.Queue(queue),
-		asynq.Unique(5*time.Minute), // unique taskId for 5minutes
+		asynq.Unique(1*time.Minute), // Reduced uniqueness window from 5min to 1min
 		asynq.TaskID(payload.TaskId),
+		asynq.Retention(10*time.Minute), // Retain completed tasks for 10min only (reduce memory)
 	)
 	if err != nil {
 		// Duplicate task
