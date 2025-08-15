@@ -5,6 +5,7 @@ RUN adduser -D -s /bin/ash -u 1000 devuser
 RUN apk update && apk --no-cache add autoconf \
     curl \
     git \
+    jq \
     openssh
 
 # Air for hot-reload

@@ -150,23 +150,16 @@ func (ua *UserActivities) ToPoint() interface{} {
 	return influxdb.NewPoint(
 		"user_activities",
 		map[string]string{
-			// Ensure all tags are non-empty strings
-			"user_id":        safeString(ua.UserID),
-			"activity_type":  safeString(ua.ActivityType),
-			"category":       safeString(ua.Category),
-			"subcategory":    safeString(ua.Subcategory),
-			"status":         safeString(ua.Status),
-			"browser":        safeString(ua.Browser),
-			"device_type":    safeString(ua.DeviceType),
-			"os":             safeString(ua.OS),
-			"channel":        safeString(ua.Channel),
-			"endpoint_group": safeString(ua.EndpointGroup),
-			"method":         safeString(ua.Method),
-			"geo_country":    safeString(ua.GeoCountry),
-			"risk_level":     safeString(ua.RiskLevel),
+			// OPTIMIZED: 5 carefully selected tags for user journey analytics
+			"activity_type": safeString(ua.ActivityType), // Core business logic
+			"status":        safeString(ua.Status),       // Operational status
+			"channel":       safeString(ua.Channel),      // User journey tracking
+			"geo_country":   safeString(ua.GeoCountry),   // Geographic analysis
+			"risk_level":    safeString(ua.RiskLevel),    // Security monitoring
 		},
 		map[string]interface{}{
-			// String fields - consistent type
+			// String fields - consistent type (including moved from tags)
+			"user_id":         safeString(ua.UserID),
 			"session_id":      safeString(ua.SessionID),
 			"request_id":      safeString(ua.RequestID),
 			"trace_id":        safeString(ua.TraceID),
@@ -182,6 +175,15 @@ func (ua *UserActivities) ToPoint() interface{} {
 			"geo_isp":         safeString(ua.GeoISP),
 			"os_version":      safeString(ua.OSVersion),
 			"browser_version": safeString(ua.BrowserVersion),
+			"subcategory":     safeString(ua.Subcategory),
+			"endpoint_group":  safeString(ua.EndpointGroup),
+			"browser":         safeString(ua.Browser),
+			"os":              safeString(ua.OS),
+
+			// Moved from tags to fields (high cardinality)
+			"category":    safeString(ua.Category),
+			"device_type": safeString(ua.DeviceType),
+			"method":      safeString(ua.Method),
 
 			// Integer fields - consistent type
 			"duration_ms":         int64(ua.DurationMs),

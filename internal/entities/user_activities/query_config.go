@@ -9,29 +9,23 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 	return v2oss.QueryBuilderConfig{
 		Measurement: "user_activities",
 		ValidTags: map[string]bool{
-			// Identity Group - Tags from ToPoint() method
-			"user_id": true,
-
 			// Business Context Group
 			"activity_type": true,
 			"category":      true,
-			"subcategory":   true,
 			"status":        true,
 
 			// Technical Context Group
-			"browser":        true,
-			"device_type":    true,
-			"os":             true,
-			"channel":        true,
-			"endpoint_group": true,
-			"method":         true,
+			"device_type": true,
+			"channel":     true,
+			"method":      true,
 
 			// Geographic & Assessment Group
 			"geo_country": true,
 			"risk_level":  true,
 		},
 		ValidFields: map[string]bool{
-			// Correlation Group - Fields from ToPoint() method
+			// Identity & Correlation Group - Fields from ToPoint() method
+			"user_id":    true,
 			"request_id": true,
 			"trace_id":   true,
 			"session_id": true,
@@ -43,14 +37,18 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 			"response_size_bytes": true,
 
 			// Security & Detection Group
-			"is_bot": true,
+			"is_bot":  true,
+			"browser": true,
+			"os":      true,
 
 			// Network & Client Context Group
-			"ip_address":   true,
-			"user_agent":   true,
-			"app_version":  true,
-			"referrer_url": true,
-			"endpoint":     true,
+			"ip_address":     true,
+			"user_agent":     true,
+			"app_version":    true,
+			"referrer_url":   true,
+			"endpoint":       true,
+			"subcategory":    true,
+			"endpoint_group": true,
 
 			// Geographic Details Group
 			"geo_city":        true,

@@ -88,13 +88,17 @@ get_asynq_queues() {
 get_asynq_workers() {
     # Safe mode: Only get metrics that definitely work
     local asynq_keys=$(docker exec insight-collector-redis redis-cli keys "asynq:*" 2>/dev/null | wc -l)
-    local worker_process=$(docker exec insight-collector pgrep -f "worker start" 2>/dev/null | wc -l)
+    # Check for Air dev mode process (contains both server and worker)
+    local main_process=$(docker exec insight-collector pgrep -f "main dev" 2>/dev/null | wc -l)
     
-    # Simple check: if we have asynq keys and worker process, server is running
-    if [ "$asynq_keys" -gt 0 ] && [ "$worker_process" -gt 0 ]; then
-        echo "Status:RUNNING Process:$worker_process Keys:$asynq_keys"
+    # Get configured worker concurrency from config (simplified approach)
+    local worker_config=$(docker exec insight-collector cat .config.json 2>/dev/null | jq -r '.asynq.concurrency' 2>/dev/null || echo "N/A")
+    
+    # Simple check: if we have asynq keys and main process, workers are running
+    if [ "$asynq_keys" -gt 0 ] && [ "$main_process" -gt 0 ]; then
+        echo "Status:RUNNING Process:$main_process Keys:$asynq_keys Workers:$worker_config"
     else
-        echo "Status:STOPPED Process:$worker_process Keys:$asynq_keys"
+        echo "Status:STOPPED Process:$main_process Keys:$asynq_keys Workers:$worker_config"
     fi
 }
 
@@ -117,14 +121,32 @@ get_http_detailed() {
 get_influxdb_metrics() {
     # Check response time to InfluxDB health
     local influx_health=$(curl -s -w "%{time_total}" -o /dev/null http://localhost:8086/health 2>/dev/null || echo "TIMEOUT")
-    echo "Health:${influx_health}s"
+    
+    # Get user_activities record count (recent data)
+    local record_count=$(docker exec influxdb2-oss influx query 'from(bucket: "insight_collector") |> range(start: -1h) |> filter(fn: (r) => r["_measurement"] == "user_activities") |> filter(fn: (r) => r["_field"] == "request_id") |> count()' --org insight --token my-super-secret-auth-token-influxdb2-oss 2>/dev/null | tail -n1 | awk '{print $NF}' || echo "0")
+    
+    echo "Health:${influx_health}s Records:$record_count"
 }
 
-# Function to get server debug info
+# Function to get server debug info with HTTP optimization metrics
 get_server_debug() {
-    local debug_response=$(curl -s -w "%{time_total}" http://localhost:8080/debug/connections 2>/dev/null || echo "TIMEOUT")
-    local response_time=$(echo "$debug_response" | tail -1)
-    echo "Debug:${response_time}s"
+    local debug_response=$(curl -s http://localhost:8080/debug/connections 2>/dev/null)
+    if [ $? -eq 0 ]; then
+        # Extract connection stats using python for reliable JSON parsing
+        local connection_stats=$(echo "$debug_response" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    stats = data['data']['connection_stats']
+    runtime = data['data']['runtime_info']
+    print(f\"Active:{stats['active_connections']}/{stats['max_connections']} Util:{stats['utilization_pct']:.1f}% Total:{stats['total_connections']} GOMAXPROCS:{runtime['gomaxprocs']}\")
+except:
+    print('ParseError')
+" 2>/dev/null)
+        echo "${connection_stats:-ParseError}"
+    else
+        echo "ConnectionTimeout"
+    fi
 }
 
 # Function to get system file descriptor limits
@@ -141,7 +163,7 @@ get_queue_status() {
 
 # Monitoring loop
 DURATION=720  # 12 minutes
-INTERVAL=30   # Check every 30 seconds
+INTERVAL=10   # Check every n seconds
 ITERATIONS=$((DURATION / INTERVAL))
 
 output "🚀 Starting monitoring loop (checking every ${INTERVAL} seconds for ${ITERATIONS} iterations)"
@@ -202,9 +224,9 @@ for i in $(seq 1 $ITERATIONS); do
     INFLUX_METRICS=$(get_influxdb_metrics)
     log_with_time "📈 InfluxDB: $INFLUX_METRICS"
     
-    # === SERVER DEBUG METRICS ===
+    # === HTTP OPTIMIZATION METRICS ===
     SERVER_DEBUG=$(get_server_debug)
-    log_with_time "🔧 Server Debug: $SERVER_DEBUG"
+    log_with_time "🚀 HTTP Optimization: $SERVER_DEBUG"
     
     # === SYSTEM LIMITS ===
     SYSTEM_LIMITS=$(get_system_limits)
@@ -218,11 +240,31 @@ for i in $(seq 1 $ITERATIONS); do
         log_with_time "❤️  Health Check: ${HEALTH_TIME}s"
     fi
     
+    # === PAGINATION PERFORMANCE TEST ===
+    # Test pagination endpoint performance with growing dataset
+    PAGINATION_TIME=$(curl -s -w "%{time_total}" -o /dev/null -X POST http://localhost:8080/v1/user-activities/list -H "Content-Type: application/json" -d '{"length": 10, "direction": "next"}' 2>/dev/null || echo "TIMEOUT")
+    if [ "$PAGINATION_TIME" = "TIMEOUT" ]; then
+        log_with_time "⚠️  Pagination Test: TIMEOUT/ERROR"
+    else
+        log_with_time "📄 Pagination Test: ${PAGINATION_TIME}s"
+    fi
+    
     # === ALERT CHECKS ===
-    if [ "$CONNECTIONS" -gt 80 ]; then
-        log_with_time "🚨 CRITICAL: HTTP Connections > 80: $CONNECTIONS"
-    elif [ "$CONNECTIONS" -gt 60 ]; then
-        log_with_time "⚠️  WARNING: HTTP Connections > 60: $CONNECTIONS"
+    # HTTP Connection Alert (updated for 800 max connections)
+    if [ "$CONNECTIONS" -gt 640 ]; then
+        log_with_time "🚨 CRITICAL: HTTP Connections > 640: $CONNECTIONS (approaching limit 800)"
+    elif [ "$CONNECTIONS" -gt 400 ]; then
+        log_with_time "⚠️  WARNING: HTTP Connections > 400: $CONNECTIONS"
+    fi
+    
+    # HTTP Optimization Alert (check if connection limiting is working)
+    if echo "$SERVER_DEBUG" | grep -q "Util:"; then
+        UTILIZATION=$(echo "$SERVER_DEBUG" | grep -o "Util:[0-9.]*%" | cut -d: -f2 | cut -d% -f1)
+        if [ "$(echo "$UTILIZATION" | cut -d. -f1)" -gt 80 ]; then
+            log_with_time "🚨 CRITICAL: HTTP Utilization > 80%: ${UTILIZATION}%"
+        elif [ "$(echo "$UTILIZATION" | cut -d. -f1)" -gt 60 ]; then
+            log_with_time "⚠️  WARNING: HTTP Utilization > 60%: ${UTILIZATION}%"
+        fi
     fi
     
     # Extract queue totals for alerting
@@ -254,6 +296,17 @@ for i in $(seq 1 $ITERATIONS); do
         fi
     fi
     
+    # Pagination performance alerting
+    if [ "$PAGINATION_TIME" != "TIMEOUT" ]; then
+        # Convert to seconds using shell arithmetic (basic)
+        PAGINATION_FLOAT=$(echo "$PAGINATION_TIME" | cut -d. -f1)
+        if [ "$PAGINATION_FLOAT" -gt 2 ]; then
+            log_with_time "🚨 CRITICAL: Pagination > 2s: ${PAGINATION_TIME}s (possible series explosion!)"
+        elif [ "$PAGINATION_FLOAT" -gt 1 ]; then
+            log_with_time "⚠️  WARNING: Pagination > 1s: ${PAGINATION_TIME}s"
+        fi
+    fi
+    
     output ""
     sleep $INTERVAL
 done
@@ -268,9 +321,11 @@ log_with_time "🌐 HTTP: Conn:$(get_connection_count) | $(get_http_detailed)"
 log_with_time "🔄 REDIS: Conn:$(get_redis_info) | $(get_redis_memory) | $(get_redis_pool)"
 log_with_time "📋 ASYNQ: $(get_asynq_queues) | $(get_asynq_workers)"
 log_with_time "📈 INFLUX: $(get_influxdb_metrics)"
-log_with_time "🔧 DEBUG: $(get_server_debug)"
+log_with_time "🚀 HTTP OPT: $(get_server_debug)"
 log_with_time "⚙️  LIMITS: $(get_system_limits)"
 log_with_time "❤️  HEALTH: $(check_health)s"
+log_with_time "📄 PAGINATION: $(curl -s -w "%{time_total}" -o /dev/null -X POST http://localhost:8080/v1/user-activities/list -H "Content-Type: application/json" -d '{"length": 10, "direction": "next"}' 2>/dev/null || echo "TIMEOUT")s"
 
 output "==========================================="
+output "📝 Log file: $LOG_FILE"
 output "🏁 Monitoring finished at: $(date)"

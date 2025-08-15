@@ -10,16 +10,16 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 		Measurement: "callback_logs",
 		ValidTags: map[string]bool{
 			// Core Identification - Tags from ToPoint() method
-			"transaction_id": true,
-			"callback_type":  true,
-			"status":         true,
+			"callback_type": true,
+			"status":        true,
 
 			// Error Categorization
 			"error_category": true,
 		},
 		ValidFields: map[string]bool{
 			// Basic Correlation - Fields from ToPoint() method
-			"callback_id": true,
+			"transaction_id": true,
+			"callback_id":    true,
 
 			// Error Details
 			"http_status_code": true,

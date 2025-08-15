@@ -9,10 +9,6 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 	return v2oss.QueryBuilderConfig{
 		Measurement: "transaction_events",
 		ValidTags: map[string]bool{
-			// Identity Group - Tags from ToPoint() method
-			"user_id":    true,
-			"session_id": true,
-
 			// Business Transaction Group
 			"transaction_type":   true,
 			"currency":           true,
@@ -25,9 +21,7 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 
 			// Technical Context Group
 			"device_type": true,
-			"os":          true,
 			"channel":     true,
-			"browser":     true,
 
 			// Geographic & Assessment Group
 			"geo_country": true,
@@ -35,16 +29,18 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 		},
 		ValidFields: map[string]bool{
 			// Correlation Group - Fields from ToPoint() method
+			"user_id":               true,
+			"session_id":            true,
 			"request_id":            true,
 			"trace_id":              true,
 			"transaction_id":        true,
 			"external_reference_id": true,
 
 			// Financial Data Group
-			"amount":         true,
-			"fee_amount":     true,
-			"net_amount":     true,
-			"exchange_rate":  true,
+			"amount":           true,
+			"fee_amount":       true,
+			"net_amount":       true,
+			"exchange_rate":    true,
 			"compliance_score": true,
 
 			// Performance Metrics Group
@@ -57,7 +53,9 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 			"approval_required": true,
 
 			// Detection & Security Group
-			"is_bot": true,
+			"is_bot":  true,
+			"browser": true,
+			"os":      true,
 
 			// Merchant & Destination Group
 			"merchant_id":         true,

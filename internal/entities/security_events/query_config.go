@@ -10,8 +10,6 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 		Measurement: "security_events",
 		ValidTags: map[string]bool{
 			// Identity Group - Tags from ToPoint() method
-			"user_id":         true,
-			"session_id":      true,
 			"identifier_type": true,
 
 			// Security Context Group
@@ -22,18 +20,17 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 			"detection_method": true,
 
 			// Technical Context Group
-			"device_type":    true,
-			"os":             true,
-			"browser":        true,
-			"channel":        true,
-			"endpoint_group": true,
-			"method":         true,
+			"device_type": true,
+			"channel":     true,
+			"method":      true,
 
 			// Geographic Group
 			"geo_country": true,
 		},
 		ValidFields: map[string]bool{
 			// Correlation Group - Fields from ToPoint() method
+			"user_id":           true,
+			"session_id":        true,
 			"request_id":        true,
 			"trace_id":          true,
 			"identifier_value":  true,
@@ -50,7 +47,10 @@ func GetQueryConfig() v2oss.QueryBuilderConfig {
 			"response_code": true,
 
 			// Detection & Context Group
-			"is_bot": true,
+			"is_bot":         true,
+			"endpoint_group": true,
+			"browser":        true,
+			"os":             true,
 
 			// Network & Client Context Group
 			"ip_address":  true,

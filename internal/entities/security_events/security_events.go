@@ -162,23 +162,16 @@ func (se *SecurityEvents) ToPoint() interface{} {
 	return influxdb.NewPoint(
 		"security_events",
 		map[string]string{
-			"user_id":          safeString(se.UserID),
-			"session_id":       safeString(se.SessionID),
-			"identifier_type":  safeString(se.IdentifierType),
-			"event_type":       safeString(se.EventType),
-			"severity":         safeString(se.Severity),
-			"auth_stage":       safeString(se.AuthStage),
-			"action_taken":     safeString(se.ActionTaken),
-			"detection_method": safeString(se.DetectionMethod),
-			"device_type":      safeString(se.DeviceType),
-			"os":               safeString(se.OS),
-			"browser":          safeString(se.Browser),
-			"channel":          safeString(se.Channel),
-			"endpoint_group":   safeString(se.EndpointGroup),
-			"method":           safeString(se.Method),
-			"geo_country":      safeString(se.GeoCountry),
+			// OPTIMIZED: 5 carefully selected tags for security analytics
+			"event_type":   safeString(se.EventType),   // Core security logic
+			"severity":     safeString(se.Severity),    // Alert prioritization
+			"channel":      safeString(se.Channel),     // Attack vector tracking
+			"geo_country":  safeString(se.GeoCountry),  // Geographic threat analysis
+			"action_taken": safeString(se.ActionTaken), // Response tracking
 		},
 		map[string]interface{}{
+			"user_id":               safeString(se.UserID),
+			"session_id":            safeString(se.SessionID),
 			"request_id":            safeString(se.RequestID),
 			"trace_id":              safeString(se.TraceID),
 			"identifier_value":      safeString(se.IdentifierValue),
@@ -194,6 +187,9 @@ func (se *SecurityEvents) ToPoint() interface{} {
 			"user_agent":            safeString(se.UserAgent),
 			"app_version":           safeString(se.AppVersion),
 			"endpoint":              safeString(se.Endpoint),
+			"endpoint_group":        safeString(se.EndpointGroup),
+			"browser":               safeString(se.Browser),
+			"os":                    safeString(se.OS),
 			"geo_city":              safeString(se.GeoCity),
 			"geo_coordinates":       safeString(se.GeoCoordinates),
 			"geo_timezone":          safeString(se.GeoTimezone),
@@ -202,6 +198,13 @@ func (se *SecurityEvents) ToPoint() interface{} {
 			"os_version":            safeString(se.OSVersion),
 			"browser_version":       safeString(se.BrowserVersion),
 			"details":               detailsJSON,
+
+			// Moved from tags to fields (high cardinality)
+			"identifier_type":  safeString(se.IdentifierType),
+			"auth_stage":       safeString(se.AuthStage),
+			"detection_method": safeString(se.DetectionMethod),
+			"device_type":      safeString(se.DeviceType),
+			"method":           safeString(se.Method),
 		},
 		se.Timestamp,
 	)

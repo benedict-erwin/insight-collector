@@ -84,12 +84,12 @@ func (cl *CallbackLogs) ToPoint() interface{} {
 	return influxdb.NewPoint(
 		"callback_logs",
 		map[string]string{
-			"transaction_id": safeString(cl.TransactionID),
 			"callback_type":  safeString(cl.CallbackType),
 			"status":         safeString(cl.Status),
 			"error_category": safeString(cl.ErrorCategory),
 		},
 		map[string]interface{}{
+			"transaction_id":   safeString(cl.TransactionID),
 			"callback_id":      string(cl.CallbackID),
 			"http_status_code": int(cl.HTTPStatusCode),
 			"error_message":    string(cl.ErrorMessage),
