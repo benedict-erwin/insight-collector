@@ -58,19 +58,19 @@ func InitClient() error {
 		PoolSize:        poolSize,         // Pool size from Redis pools config
 		ConnMaxIdleTime: idleTimeout,      // Configurable idle timeout
 		ConnMaxLifetime: maxLifetime,      // Configurable max lifetime
-		PoolTimeout:     10 * time.Second, // Timeout when getting connection from pool (prevent blocking)
-		MinIdleConns:    2,                // Minimum idle connections to maintain
-		MaxIdleConns:    poolSize / 2,     // Maximum idle connections (50% of pool size)
+		PoolTimeout:     3 * time.Second,  // Reduced timeout to prevent blocking during high load
+		MinIdleConns:    poolSize / 10,    // 10% minimum idle connections
+		MaxIdleConns:    poolSize / 3,     // 33% maximum idle connections for better reuse
 
-		// Connection timeouts optimization
-		DialTimeout:  5 * time.Second, // Connection establishment timeout
-		ReadTimeout:  3 * time.Second, // Read operation timeout
-		WriteTimeout: 3 * time.Second, // Write operation timeout
+		// Aggressive connection timeouts for high-load performance
+		DialTimeout:  2 * time.Second, // Faster connection establishment
+		ReadTimeout:  1 * time.Second, // Faster read operations
+		WriteTimeout: 1 * time.Second, // Faster write operations
 
-		// Retry configuration for reliability
-		MaxRetries:      2,                      // Retry failed commands up to 2 times
-		MinRetryBackoff: 8 * time.Millisecond,   // Minimum backoff between retries
-		MaxRetryBackoff: 512 * time.Millisecond, // Maximum backoff between retries
+		// Reduced retries for high-load performance
+		MaxRetries:      1,                      // Single retry to prevent cascading delays
+		MinRetryBackoff: 5 * time.Millisecond,   // Faster retry backoff
+		MaxRetryBackoff: 100 * time.Millisecond, // Shorter maximum backoff
 	})
 
 	// Create Asynq client using the optimized Redis client

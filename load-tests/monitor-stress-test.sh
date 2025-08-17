@@ -132,18 +132,26 @@ get_influxdb_metrics() {
 get_server_debug() {
     local debug_response=$(curl -s http://localhost:8080/debug/connections 2>/dev/null)
     if [ $? -eq 0 ]; then
-        # Extract connection stats using python for reliable JSON parsing
-        local connection_stats=$(echo "$debug_response" | python3 -c "
+        # Extract server info using python for reliable JSON parsing
+        local server_stats=$(echo "$debug_response" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
-    stats = data['data']['connection_stats']
-    runtime = data['data']['runtime_info']
-    print(f\"Active:{stats['active_connections']}/{stats['max_connections']} Util:{stats['utilization_pct']:.1f}% Total:{stats['total_connections']} GOMAXPROCS:{runtime['gomaxprocs']}\")
-except:
+    server_info = data['data']['server_info']
+    timestamp = data['data']['timestamp']
+    
+    # Extract key server configuration values
+    read_timeout = server_info.get('read_timeout', 'N/A')
+    write_timeout = server_info.get('write_timeout', 'N/A')
+    idle_timeout = server_info.get('idle_timeout', 'N/A')
+    keepalive = server_info.get('keepalive_period', 'N/A')
+    tcp_nodelay = server_info.get('tcp_nodelay', False)
+    
+    print(f\"ReadTO:{read_timeout} WriteTO:{write_timeout} IdleTO:{idle_timeout} KeepAlive:{keepalive} NoDelay:{tcp_nodelay}\")
+except Exception as e:
     print('ParseError')
 " 2>/dev/null)
-        echo "${connection_stats:-ParseError}"
+        echo "${server_stats:-ParseError}"
     else
         echo "ConnectionTimeout"
     fi
@@ -257,14 +265,11 @@ for i in $(seq 1 $ITERATIONS); do
         log_with_time "⚠️  WARNING: HTTP Connections > 400: $CONNECTIONS"
     fi
     
-    # HTTP Optimization Alert (check if connection limiting is working)
-    if echo "$SERVER_DEBUG" | grep -q "Util:"; then
-        UTILIZATION=$(echo "$SERVER_DEBUG" | grep -o "Util:[0-9.]*%" | cut -d: -f2 | cut -d% -f1)
-        if [ "$(echo "$UTILIZATION" | cut -d. -f1)" -gt 80 ]; then
-            log_with_time "🚨 CRITICAL: HTTP Utilization > 80%: ${UTILIZATION}%"
-        elif [ "$(echo "$UTILIZATION" | cut -d. -f1)" -gt 60 ]; then
-            log_with_time "⚠️  WARNING: HTTP Utilization > 60%: ${UTILIZATION}%"
-        fi
+    # HTTP Server Configuration Check (verify optimization settings are active)
+    if echo "$SERVER_DEBUG" | grep -q "NoDelay:True"; then
+        log_with_time "✅ HTTP TCP_NODELAY optimization is active"
+    elif echo "$SERVER_DEBUG" | grep -q "ParseError"; then
+        log_with_time "⚠️  WARNING: Cannot verify HTTP optimizations (ParseError)"
     fi
     
     # Extract queue totals for alerting
