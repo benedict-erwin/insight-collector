@@ -44,6 +44,18 @@ type (
 			Nodes    []string `json:"nodes" mapstructure:"nodes"`
 			Password string   `json:"password" mapstructure:"password"`
 		} `json:"cluster" mapstructure:"cluster"`
+		Pools map[string]PoolConfig `json:"pools" mapstructure:"pools"`
+	}
+
+	// PoolConfig holds connection pool configuration for specific client types
+	PoolConfig struct {
+		Size         int    `json:"size" mapstructure:"size"`
+		Timeout      string `json:"timeout" mapstructure:"timeout"`
+		DialTimeout  string `json:"dial_timeout" mapstructure:"dial_timeout"`
+		ReadTimeout  string `json:"read_timeout" mapstructure:"read_timeout"`
+		WriteTimeout string `json:"write_timeout" mapstructure:"write_timeout"`
+		MaxLifetime  string `json:"max_lifetime" mapstructure:"max_lifetime"`
+		IdleTimeout  string `json:"idle_timeout" mapstructure:"idle_timeout"`
 	}
 
 	asynq struct {

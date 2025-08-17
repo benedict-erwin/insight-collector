@@ -29,14 +29,16 @@ func NewRedisClient(cfg RedisConfig, keyPrefix string, db int) (*RedisClient, er
 	switch client.mode {
 	case ModeSingle:
 		client.singleClient = redis.NewClient(&redis.Options{
-			Addr:         fmt.Sprintf("%s:%d", cfg.Single.Host, cfg.Single.Port),
-			Password:     cfg.Single.Password,
-			DB:           db,
-			DialTimeout:  cfg.Pool.DialTimeout,
-			ReadTimeout:  cfg.Pool.ReadTimeout,
-			WriteTimeout: cfg.Pool.WriteTimeout,
-			PoolSize:     cfg.Pool.Size,
-			PoolTimeout:  cfg.Pool.Timeout,
+			Addr:            fmt.Sprintf("%s:%d", cfg.Single.Host, cfg.Single.Port),
+			Password:        cfg.Single.Password,
+			DB:              db,
+			DialTimeout:     cfg.Pool.DialTimeout,
+			ReadTimeout:     cfg.Pool.ReadTimeout,
+			WriteTimeout:    cfg.Pool.WriteTimeout,
+			PoolSize:        cfg.Pool.Size,
+			PoolTimeout:     cfg.Pool.Timeout,
+			ConnMaxLifetime: cfg.Pool.MaxLifetime,
+			ConnMaxIdleTime: cfg.Pool.IdleTimeout,
 		})
 
 		// Test connection
@@ -48,13 +50,15 @@ func NewRedisClient(cfg RedisConfig, keyPrefix string, db int) (*RedisClient, er
 
 	case ModeCluster:
 		client.clusterClient = redis.NewClusterClient(&redis.ClusterOptions{
-			Addrs:        cfg.Cluster.Nodes,
-			Password:     cfg.Cluster.Password,
-			DialTimeout:  cfg.Pool.DialTimeout,
-			ReadTimeout:  cfg.Pool.ReadTimeout,
-			WriteTimeout: cfg.Pool.WriteTimeout,
-			PoolSize:     cfg.Pool.Size,
-			PoolTimeout:  cfg.Pool.Timeout,
+			Addrs:           cfg.Cluster.Nodes,
+			Password:        cfg.Cluster.Password,
+			DialTimeout:     cfg.Pool.DialTimeout,
+			ReadTimeout:     cfg.Pool.ReadTimeout,
+			WriteTimeout:    cfg.Pool.WriteTimeout,
+			PoolSize:        cfg.Pool.Size,
+			PoolTimeout:     cfg.Pool.Timeout,
+			ConnMaxLifetime: cfg.Pool.MaxLifetime,
+			ConnMaxIdleTime: cfg.Pool.IdleTimeout,
 		})
 
 		// Test connection

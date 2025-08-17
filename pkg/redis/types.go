@@ -26,13 +26,13 @@ const (
 
 // Key prefixes for Redis Cluster logical separation (since DB selection not supported)
 const (
-	PrefixMain      = "main:"
-	PrefixWorker    = "worker:"
-	PrefixSessions  = "sessions:"
-	PrefixCache     = "cache:"
-	PrefixTempData  = "temp:"
-	PrefixNonce     = "nonce:"
-	PrefixAsynq     = "asynq:"
+	PrefixMain     = "main:"
+	PrefixWorker   = "worker:"
+	PrefixSessions = "sessions:"
+	PrefixCache    = "cache:"
+	PrefixTempData = "temp:"
+	PrefixNonce    = "nonce:"
+	PrefixAsynq    = "asynq:"
 )
 
 // Client defines the unified Redis client interface
@@ -49,11 +49,11 @@ type Client interface {
 
 // RedisConfig holds Redis configuration for different modes
 type RedisConfig struct {
-	Mode     string        `json:"mode"`     // single, cluster, sentinel
-	Single   SingleConfig  `json:"single"`   // Single-node configuration
-	Cluster  ClusterConfig `json:"cluster"`  // Cluster configuration
+	Mode     string         `json:"mode"`     // single, cluster, sentinel
+	Single   SingleConfig   `json:"single"`   // Single-node configuration
+	Cluster  ClusterConfig  `json:"cluster"`  // Cluster configuration
 	Sentinel SentinelConfig `json:"sentinel"` // Sentinel configuration
-	Pool     PoolConfig    `json:"pool"`     // Connection pool settings
+	Pool     PoolConfig     `json:"pool"`     // Connection pool settings
 }
 
 // SingleConfig holds single-node Redis configuration
@@ -85,6 +85,8 @@ type PoolConfig struct {
 	DialTimeout  time.Duration `json:"dial_timeout"`
 	ReadTimeout  time.Duration `json:"read_timeout"`
 	WriteTimeout time.Duration `json:"write_timeout"`
+	MaxLifetime  time.Duration `json:"max_lifetime"`
+	IdleTimeout  time.Duration `json:"idle_timeout"`
 }
 
 // DefaultRedisConfig returns default Redis configuration

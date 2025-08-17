@@ -22,6 +22,32 @@ var (
 func InitClient() error {
 	cfg := config.Get()
 
+	// Get pool size from Redis pools config with fallback to Asynq config for backward compatibility
+	var poolSize int
+	var maxLifetime, idleTimeout time.Duration = 30 * time.Minute, 5 * time.Minute
+
+	if cfg.Redis.Pools != nil {
+		if asynqPool, exists := cfg.Redis.Pools["asynq"]; exists {
+			poolSize = asynqPool.Size
+			if asynqPool.MaxLifetime != "" {
+				if parsed, err := time.ParseDuration(asynqPool.MaxLifetime); err == nil {
+					maxLifetime = parsed
+				}
+			}
+			if asynqPool.IdleTimeout != "" {
+				if parsed, err := time.ParseDuration(asynqPool.IdleTimeout); err == nil {
+					idleTimeout = parsed
+				}
+			}
+		} else if defaultPool, exists := cfg.Redis.Pools["default"]; exists {
+			poolSize = defaultPool.Size
+		} else {
+			poolSize = cfg.Asynq.PoolSize // Fallback to old config
+		}
+	} else {
+		poolSize = cfg.Asynq.PoolSize // Fallback to old config
+	}
+
 	// Create advanced Redis client with optimization parameters
 	redisClient = redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -29,12 +55,12 @@ func InitClient() error {
 		DB:       cfg.Asynq.DB, // Use Asynq-specific DB from config
 
 		// POOL OPTIMIZATION
-		PoolSize:        cfg.Asynq.PoolSize,     // Basic pool size (from config)
-		ConnMaxIdleTime: 5 * time.Minute,        // Keep idle connections for 5 minutes (reduce PING frequency)
-		ConnMaxLifetime: 30 * time.Minute,       // Refresh connections every 30 minutes (prevent stale connections)
-		PoolTimeout:     10 * time.Second,       // Timeout when getting connection from pool (prevent blocking)
-		MinIdleConns:    2,                      // Minimum idle connections to maintain
-		MaxIdleConns:    cfg.Asynq.PoolSize / 2, // Maximum idle connections (50% of pool size)
+		PoolSize:        poolSize,         // Pool size from Redis pools config
+		ConnMaxIdleTime: idleTimeout,      // Configurable idle timeout
+		ConnMaxLifetime: maxLifetime,      // Configurable max lifetime
+		PoolTimeout:     10 * time.Second, // Timeout when getting connection from pool (prevent blocking)
+		MinIdleConns:    2,                // Minimum idle connections to maintain
+		MaxIdleConns:    poolSize / 2,     // Maximum idle connections (50% of pool size)
 
 		// Connection timeouts optimization
 		DialTimeout:  5 * time.Second, // Connection establishment timeout
@@ -54,12 +80,12 @@ func InitClient() error {
 		Str("host", cfg.Redis.Host).
 		Int("port", cfg.Redis.Port).
 		Int("db", cfg.Asynq.DB).
-		Int("pool_size", cfg.Asynq.PoolSize).
-		Dur("conn_max_idle_time", 5*time.Minute).
-		Dur("conn_max_lifetime", 30*time.Minute).
+		Int("pool_size", poolSize).
+		Dur("conn_max_idle_time", idleTimeout).
+		Dur("conn_max_lifetime", maxLifetime).
 		Dur("pool_timeout", 10*time.Second).
 		Int("min_idle_conns", 2).
-		Int("max_idle_conns", cfg.Asynq.PoolSize/2).
+		Int("max_idle_conns", poolSize/2).
 		Msg("Asynq client initialized with advanced Redis pool optimization")
 
 	return nil

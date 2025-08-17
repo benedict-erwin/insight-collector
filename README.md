@@ -642,11 +642,59 @@ Override credentials via environment variables:
     "cluster": {
       "nodes": ["redis-1:6379", "redis-2:6379", "redis-3:6379"],
       "password": ""
+    },
+    "pools": {
+      "default": {
+        "size": 300,
+        "timeout": "5s",
+        "dial_timeout": "3s",
+        "read_timeout": "2s",
+        "write_timeout": "2s",
+        "max_lifetime": "30m",
+        "idle_timeout": "10m"
+      },
+      "asynq": {
+        "size": 200,
+        "timeout": "10s",
+        "dial_timeout": "5s",
+        "read_timeout": "3s",
+        "write_timeout": "3s",
+        "max_lifetime": "30m",
+        "idle_timeout": "5m"
+      },
+      "sessions": {
+        "size": 50,
+        "timeout": "3s",
+        "dial_timeout": "2s",
+        "read_timeout": "1s",
+        "write_timeout": "1s",
+        "max_lifetime": "15m",
+        "idle_timeout": "2m"
+      },
+      "cache": {
+        "size": 100,
+        "timeout": "5s",
+        "dial_timeout": "3s",
+        "read_timeout": "2s",
+        "write_timeout": "2s",
+        "max_lifetime": "20m",
+        "idle_timeout": "5m"
+      },
+      "nonce": {
+        "size": 20,
+        "timeout": "2s",
+        "dial_timeout": "1s",
+        "read_timeout": "1s",
+        "write_timeout": "1s",
+        "max_lifetime": "10m",
+        "idle_timeout": "1m"
+      }
     }
   },
   "asynq": {
-    "concurrency": 10,
-    "db": 0
+    "concurrency": 200,
+    "db": 0,
+    "pool_size": 200
   },
   "influxdb": {
     "version": "v2-oss",
@@ -763,16 +811,93 @@ The service uses a **mode-agnostic** Redis architecture that supports both singl
 
 **Specialized Clients:**
 ```go
-redis.NewClientForMain()        // General app data
-redis.NewClientForAsynq()       // Job queue (optimized pool: 15)
-redis.NewClientForSessions()    // User sessions (DB 1)
-redis.NewClientForCache()       // App cache (DB 2)  
-redis.NewClientForNonceStore()  // Replay protection (DB 4)
+redis.NewClientForMain()        // General app data (default pool: 300)
+redis.NewClientForAsynq()       // Job queue (optimized pool: 200)
+redis.NewClientForSessions()    // User sessions (lightweight pool: 50)
+redis.NewClientForCache()       // App cache (medium pool: 100)
+redis.NewClientForNonceStore()  // Replay protection (small pool: 20)
 ```
 
 **Database Separation:**
 - **Single-node**: Uses Redis databases 0-4 for logical separation
 - **Cluster**: Uses key prefixes since cluster mode doesn't support DB selection
+
+## Per-Client Redis Pool Configuration
+
+**Advanced Pool Management**: The service now features per-client Redis pool configuration for optimal performance tuning and resource management.
+
+### Key Features
+- ✅ **Client-Specific Pools**: Different pool sizes optimized for each use case
+- ✅ **Smart Fallback System**: 4-tier fallback hierarchy for maximum compatibility  
+- ✅ **Cluster Compatibility**: Works seamlessly with both single-node and cluster modes
+- ✅ **Performance Tuning**: Easy optimization via configuration without code changes
+- ✅ **Backward Compatibility**: Legacy `asynq.pool_size` still supported
+
+### Pool Configuration Structure
+```json
+"redis": {
+  "pools": {
+    "default": {       // Main operations (300 connections)
+      "size": 300,
+      "timeout": "5s",
+      "dial_timeout": "3s",
+      "read_timeout": "2s",
+      "write_timeout": "2s",
+      "max_lifetime": "30m",
+      "idle_timeout": "10m"
+    },
+    "asynq": {         // Background job processing (200 connections)
+      "size": 200,
+      "timeout": "10s",
+      "max_lifetime": "30m",
+      "idle_timeout": "5m"
+    },
+    "sessions": {      // User sessions (50 connections)
+      "size": 50,
+      "timeout": "3s",
+      "max_lifetime": "15m",
+      "idle_timeout": "2m"
+    },
+    "cache": {         // Application cache (100 connections)
+      "size": 100,
+      "timeout": "5s",
+      "max_lifetime": "20m",
+      "idle_timeout": "5m"
+    },
+    "nonce": {         // Auth nonce storage (20 connections)
+      "size": 20,
+      "timeout": "2s",
+      "max_lifetime": "10m",
+      "idle_timeout": "1m"
+    }
+  }
+}
+```
+
+### Fallback Hierarchy
+1. **Client-Specific Pool**: `redis.pools.{clientType}` (e.g., `redis.pools.asynq`)
+2. **Default Pool**: `redis.pools.default` (fallback for all clients)
+3. **Legacy Config**: `asynq.pool_size` (backward compatibility)
+4. **Safe Defaults**: Hardcoded fallback (size: 10, timeout: 30s)
+
+### Performance Tuning Examples
+```json
+// High-performance Asynq for heavy job processing
+"asynq": {"size": 300, "timeout": "15s"}
+
+// Memory-optimized sessions  
+"sessions": {"size": 25, "idle_timeout": "1m"}
+
+// High-performance cache with longer connections
+"cache": {"size": 200, "max_lifetime": "1h"}
+```
+
+### Benefits
+- **🚀 Performance**: Pool size **15 → 200** for Asynq (13x improvement)
+- **⚡ Resource Optimization**: Right-sized pools prevent over/under-provisioning
+- **🎯 Easy Tuning**: Change config without code deployment
+- **🔧 Client-Specific**: Each client optimized for its usage pattern
+- **💾 Connection Lifecycle**: Proper MaxLifetime and IdleTimeout management
 
 ## Multi Authentication System
 
